@@ -1,0 +1,27 @@
+# Build products
+bin/
+build/
+*.o
+*.a
+*.so
+
+# Generated model output
+output/
+
+# Convenience symlink to built executable
+soil_driver
+
+# Development/archive snapshots
+*.tar
+*.tar.gz
+
+# Editor and temporary files
+*~
+*.bak
+*.orig
+*.swp
+
+#other files
+
+soil_bmi_naming_proposal.docx
+noah-mp_soilwater_code/

@@ -1,0 +1,47 @@
+cfe_config_version=3.0[]
+cfe_model_timestep_h=1.0[h]
+catchment_id=87[]
+catchment_latitude=35.52[decimaldegree]
+catchment_longitude=-97.97[decimaldegree]
+catchment_elevation=34.5[m]
+catchment_area_km2=1.0[km2]
+forcing_file=./forcings/cat87_01Dec2015.csv
+control_total_num_simulation_timesteps=720[]
+verbosity=1[]
+soil_depth_m=2.0[m]
+soil_Clapp-Hornberger_exponent_b=4.05[]
+soil_sat_hydraulic_conductivity_cm_per_h=1.2168[cm h-1]
+soil_sat_capillary_head_cm=35.5[cm]
+soil_to_gw_percolation_rate_limiter_0_to_1=0.81[]
+soil_effective_porosity=0.439[V/V]
+soil_wilting_point_moisture_content=0.066[V/V]
+soil_field_capacity_Pcap_over_Patm_0-1=0.333[P/P]
+soil_reservoir_init_storage_m=0.5142[m]
+soil_reservoir_rate_const_to_subsurface_lateral_flow_m_per_h=0.003[]
+soil_ice_content_impervious_threshold=0.12[V/V]
+gw_reservoir_max_storage_m=0.25[m]
+gw_reservoir_init_storage_m=0.0312[]
+gw_discharge_coeff_m_per_timestep=1.8e-05[m h-1]
+gw_discharge_exponent=6.0[]
+subsurface_routing_nash_K=0.03[h-1]
+subsurface_routing_nash_cascade_init_storage_m=0.0[m],0.0[m]
+control_soil_simulate_freeze-thaw
+control_ET_simulate_Noah-MP_soil_discretizations_true-false=TRUE
+control_ET_simulate_root_zone_true-false=TRUE
+control_ET_deepest_root_zone_discretization=3
+control_surface_runoff_routing_scheme=NASH_CASCADE
+control_rainfall_partitioning_scheme=Xinanjiang
+surface_routing_num_giuh_ordinates = 6 []
+surface_routing_num_nash_reservoirs=2[]
+surface_routing_nash_cascade_init_storage_m=0.0[m],0.0[m]
+surface_routing_nash_K=0.83089[h-1]
+surface_nash_cascade_infil_rate_const_Kinf=0.0[h-1]
+surface_nash_cascade_retention_depth_cm=0.0[cm]
+Xinanjiang_tension_water_inflection_point=0.5[V/V]
+Xinanjiang_tension_water_soil_moist_distrib_exponent=1.0[]
+Xinanjiang_free_water_soil_moist_distrib_exponent=1.0[]
+urban_fraction_0-1=0.0[A/A]
+
+
+
+
