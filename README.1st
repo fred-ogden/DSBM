@@ -1,0 +1,16 @@
+DSBM / Noah-MP comparison
+
+The code in this repo is the developmental version of the discrete soil-moisture balance model (DSBM) that is used in version 3.0 and greater of the Conceptual Functional Equivalent (CFE) to the WRF-Hydro based National Water Model (version 3.1 and earlier).
+
+This code includes the soil-moisture based Richards' equation (RE) solver from Noah-MP for comparison purposes.  Either DSBM or the Noah-MP RE solver can be used to simulate the same forcings and produce the same outputs through the BMI driver:
+
+Example:
+  ./soil_driver --solver noahmp ...
+  ./soil_driver --solver dsbm ...
+
+The Noah-MP comparison kernel translates the supplied WDFCND1/SRT/SSTEP/
+ROSR12 path for unfrozen soil.  It intentionally does not import the full
+Noah-MP runoff/groundwater machinery.
+
+Comparison-wrapper choices are documented at the top of
+src/noahmp_soilwater_stateless.c.  In particular, DWSAT is derived from the same Clapp-Hornberger relations used by DSBM because the supplied Noah-MP files use parameters%DWSAT but do not contain its parameter construction code.
