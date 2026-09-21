@@ -32,9 +32,9 @@ void fprintf_time_col(FILE *fp, TimeColMode mode, long idx,
                       int Y,int M,int D,int HH,int Mi)
 {
     switch(mode) {
-    case TC_INDEX: fprintf(fp,"%ld", idx); break;
-    case TC_JD:    fprintf(fp,"%.8f", util_to_julian(Y,M,D,HH,Mi,0)); break;
-    case TC_YMDH:  fprintf(fp,"%04d-%02d-%02d %02d:%02d", Y,M,D,HH,Mi); break;
+    case TC_TIMESTEP: fprintf(fp,"%ld", idx); break;
+    case TC_JULIANDATE:    fprintf(fp,"%.8f", util_to_julian(Y,M,D,HH,Mi,0)); break;
+    case TC_DATETIME:  fprintf(fp,"%04d-%02d-%02d %02d:%02d", Y,M,D,HH,Mi); break;
     }
 }
 

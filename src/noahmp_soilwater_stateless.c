@@ -17,7 +17,8 @@
  *     SLOPE multiplier
  *   - transpiration demand uses the same DSBM PET/root-zone stress rule
  *     so that the experiment isolates the vertical soil-water solver
- *   - no lateral Nash removal in this comparison kernel
+ *   - lateral removal uses the same per-disc CFE3.1/DSBM formulation
+ *     and is applied as a sink within the Richards solve
  *
  * Noah-MP uses SI seconds internally.  Public driver quantities retain the
  * existing DSBM interface units.
@@ -104,6 +105,7 @@ static int noahmp_rosr12(double p[NDISC], const double a[NDISC],
 static void noahmp_srt(const SoilControl *ctrl,
                        const SoilGeometry *geom, const SoilParameters *par,
                        const double theta[NDISC], const double etrani_m_per_s[NDISC],
+                       const double lateral_m_per_s[NDISC],
                        double pddum_m_per_s, double qseva_m_per_s,
                        double dtfine_s, int ndisc,
                        double rhstt[NDISC], double ai[NDISC],
@@ -133,7 +135,7 @@ static void noahmp_srt(const SoilControl *ctrl,
             dsmdz[k] = 2.0 * (theta[k] - theta[k + 1]) / temp1;
             interface_q_m_per_s[k] = wdf[k] * dsmdz[k] + wcnd[k];
             wflux[k] = interface_q_m_per_s[k] - pddum_m_per_s
-                     + etrani_m_per_s[k] + qseva_m_per_s;
+                     + etrani_m_per_s[k] + lateral_m_per_s[k] + qseva_m_per_s;
         } else if (k < ndisc - 1) {
             double temp1 = zsoil[k - 1] - zsoil[k + 1];
             denom[k] = zsoil[k - 1] - zsoil[k];
@@ -141,7 +143,7 @@ static void noahmp_srt(const SoilControl *ctrl,
             dsmdz[k] = 2.0 * (theta[k] - theta[k + 1]) / temp1;
             interface_q_m_per_s[k] = wdf[k] * dsmdz[k] + wcnd[k];
             wflux[k] = interface_q_m_per_s[k] - interface_q_m_per_s[k - 1]
-                     + etrani_m_per_s[k];
+                     + etrani_m_per_s[k] + lateral_m_per_s[k];
         } else {
             double qdrain = par->perc_limiter_0_to_1 * wcnd[k];
             denom[k] = zsoil[k - 1] - zsoil[k];
@@ -160,7 +162,7 @@ static void noahmp_srt(const SoilControl *ctrl,
             *qdrain_m_per_s = qdrain;
             interface_q_m_per_s[k] = *qdrain_m_per_s;
             wflux[k] = -interface_q_m_per_s[k - 1]
-                     + etrani_m_per_s[k] + *qdrain_m_per_s;
+                     + etrani_m_per_s[k] + lateral_m_per_s[k] + *qdrain_m_per_s;
         }
     }
 
@@ -303,7 +305,7 @@ int noahmp_soil_step_one_hour_stateless(
     const SoilForcing        *forcing,
     SoilStateOut             *sout,
     SoilFluxes               *flux,
-    TimestepSoilMassbal      *mb,
+    TimestepSoilVolumeBalance      *volbal,
     FILE                     *debug_fptr)
 {
     double theta[NDISC];
@@ -318,12 +320,12 @@ int noahmp_soil_step_one_hour_stateless(
 
     (void)debug_fptr;
 
-    if (!ctrl || !geom || !par || !sin || !forcing || !sout || !flux || !mb) return 1;
+    if (!ctrl || !geom || !par || !sin || !forcing || !sout || !flux || !volbal) return 1;
     ndisc = ctrl->ndisc;
     if (ndisc != NDISC || ndisc < 2) return 2;
 
     memset(flux, 0, sizeof(*flux));
-    memset(mb, 0, sizeof(*mb));
+    memset(volbal, 0, sizeof(*volbal));
     for (k = 0; k < ndisc; k++) {
         theta[k] = sin->theta_in[k];
         sout->ch_lut_hint_out[k] = sin->ch_lut_hint_in[k];
@@ -343,6 +345,7 @@ int noahmp_soil_step_one_hour_stateless(
 
     for (iter = 0; iter < niter; iter++) {
         double etrani[NDISC];
+        double lateral_m_per_s[NDISC];
         double rhstt[NDISC], ai[NDISC], bi[NDISC], ci[NDISC];
         double wcnd[NDISC], wdf[NDISC], ddz[NDISC], qdrain = 0.0;
         double interface_q[NDISC];
@@ -353,7 +356,38 @@ int noahmp_soil_step_one_hour_stateless(
 
         comparison_et_rates(ctrl, geom, par, theta, pet_m_per_s, dtfine_s, etrani);
 
-        noahmp_srt(ctrl, geom, par, theta, etrani,
+        /* CFE3.1/DSBM lateral-flow formulation, evaluated independently
+         * for each disc at the beginning of this fine step.  The resulting
+         * depth flux is supplied to SRT as a sink in the Richards equation. */
+        for (k = 0; k < ndisc; k++) {
+            double lateral_this_substep_m = 0.0;
+
+            if (par->klf_m_per_h > 0.0 && theta[k] > par->theta_fc) {
+                double denom = par->theta_sat - par->theta_fc;
+                double frac;
+                double potential_m;
+                double available_m;
+
+                if (denom < 1.0e-12) denom = 1.0e-12;
+                frac = (theta[k] - par->theta_fc) / denom;
+                if (frac < 0.0) frac = 0.0;
+                if (frac > 1.0) frac = 1.0;
+
+                potential_m = par->klf_m_per_h * frac * (dtfine_s / 3600.0);
+                available_m = (theta[k] - par->theta_fc) * geom->dz[k];
+                if (available_m < 0.0) available_m = 0.0;
+
+                lateral_this_substep_m = potential_m;
+                if (lateral_this_substep_m > available_m)
+                    lateral_this_substep_m = available_m;
+            }
+
+            lateral_m_per_s[k] = lateral_this_substep_m / dtfine_s;
+            flux->lateral_by_disc_m[k] += lateral_this_substep_m;
+            volbal->lateral_m += lateral_this_substep_m;
+        }
+
+        noahmp_srt(ctrl, geom, par, theta, etrani, lateral_m_per_s,
                    rain_m_per_s, 0.0, dtfine_s, ndisc,
                    rhstt, ai, bi, ci, wcnd, wdf, ddz, &qdrain, interface_q);
 
@@ -389,9 +423,9 @@ int noahmp_soil_step_one_hour_stateless(
 
         total_saturation_excess_m += wplus;
         total_bottom_deficit_m += wminus;
-        mb->AET_m += et_iter_m;
+        volbal->AET_m += et_iter_m;
 
-        /* Diagnostic check only; final mass balance is calculated below. */
+        /* Diagnostic check only; final volume balance is calculated below. */
         (void)storage_before;
     }
 
@@ -406,18 +440,18 @@ int noahmp_soil_step_one_hour_stateless(
     if (flux->rain_into_soil_m < 0.0) flux->rain_into_soil_m = 0.0;
 
     storage_end = storage_sum(theta, geom->dz, ndisc);
-    mb->in_rain_m = flux->rain_into_soil_m;
-    mb->excess_m = flux->rain_excess_m;
-    mb->perc_m = flux->percolation_to_gw_m;
-    mb->lateral_m = 0.0;
-    mb->delta_storage_m = storage_end - storage_start;
+    volbal->in_rain_m = flux->rain_into_soil_m;
+    volbal->excess_m = flux->rain_excess_m;
+    volbal->perc_m = flux->percolation_to_gw_m;
+    /* volbal->lateral_m was accumulated from the per-disc Richards sinks. */
+    volbal->delta_storage_m = storage_end - storage_start;
 
     /* WMINUS is water Noah-MP must obtain from subsurface runoff to repair a
-     * negative bottom state.  Report it as a mass-balance correction rather
+     * negative bottom state.  Report it as a volume-balance correction rather
      * than silently hiding it.  It should be zero in normal comparison runs. */
-    mb->residual_m = mb->in_rain_m + total_bottom_deficit_m
-                   - (mb->perc_m + mb->AET_m + mb->lateral_m)
-                   - mb->delta_storage_m;
+    volbal->residual_m = volbal->in_rain_m + total_bottom_deficit_m
+                   - (volbal->perc_m + volbal->AET_m + volbal->lateral_m)
+                   - volbal->delta_storage_m;
 
     return 0;
 }

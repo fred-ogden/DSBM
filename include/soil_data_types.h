@@ -86,7 +86,7 @@ typedef struct {
     double lateral_m;
     double delta_storage_m;   // \u03a3(\u03b8_out-\u03b8_in)*dz
     double residual_m;        // in - (outs) - \u0394S
-} TimestepSoilMassbal;
+} TimestepSoilVolumeBalance;
 
 #ifdef __cplusplus
 } // extern "C"

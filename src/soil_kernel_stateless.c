@@ -89,7 +89,7 @@ int soil_step_one_hour_stateless(
     const SoilForcing        *forcing,
     SoilStateOut             *sout,
     SoilFluxes               *flux,
-    TimestepSoilMassbal      *mb,
+    TimestepSoilVolumeBalance      *volbal,
     FILE                     *debug_fptr)
 {
     (void)debug_fptr;
@@ -111,13 +111,13 @@ int soil_step_one_hour_stateless(
     flux->rain_excess_m       = 0.0;
     flux->n_sub_used          = 0;
 
-    mb->in_rain_m       = 0.0;
-    mb->excess_m        = 0.0;
-    mb->perc_m          = 0.0;
-    mb->AET_m           = 0.0;
-    mb->lateral_m       = 0.0;
-    mb->delta_storage_m = 0.0;
-    mb->residual_m      = 0.0;
+    volbal->in_rain_m       = 0.0;
+    volbal->excess_m        = 0.0;
+    volbal->perc_m          = 0.0;
+    volbal->AET_m           = 0.0;
+    volbal->lateral_m       = 0.0;
+    volbal->delta_storage_m = 0.0;
+    volbal->residual_m      = 0.0;
 
     const int ndisc  = ctrl->ndisc;
     const int nintf  = ndisc - 1;
@@ -342,11 +342,11 @@ int soil_step_one_hour_stateless(
                     theta, geom->dz, par->theta_fc, par->theta_sat,
                     par->klf_m_per_h, dt_sub, flux->lateral_by_disc_m);
 
-            mb->lateral_m += lat_removed;
+            volbal->lateral_m += lat_removed;
         }
 
         // accumulate step totals
-        mb->AET_m += et_this_sub;
+        volbal->AET_m += et_this_sub;
 
         // D12) safety clamp
         for (int i = 0; i < ndisc; i++) {
@@ -363,23 +363,23 @@ int soil_step_one_hour_stateless(
     // write state out
     for (int i = 0; i < NDISC; i++) sout->theta_out[i] = theta[i];
 
-    // mass balances
+    // volume balance
     const double storage_end = storage_sum_ndisc(theta, geom->dz);
 
-    mb->in_rain_m  = flux->rain_into_soil_m;
-    mb->excess_m   = flux->rain_excess_m;
-    mb->perc_m     = flux->percolation_to_gw_m;
+    volbal->in_rain_m  = flux->rain_into_soil_m;
+    volbal->excess_m   = flux->rain_excess_m;
+    volbal->perc_m     = flux->percolation_to_gw_m;
 
-    // total lateral already accumulated in mb->lateral_m inside loop
+    // total lateral already accumulated in volbal->lateral_m inside loop
     // Ensure it matches sum of per-disc laterals (defensive)
     double lat_sum = 0.0; for (int i = 0; i < NDISC; i++) lat_sum += flux->lateral_by_disc_m[i];
-    mb->lateral_m = lat_sum;
+    volbal->lateral_m = lat_sum;
 
-    mb->delta_storage_m = (storage_end - storage_start);
+    volbal->delta_storage_m = (storage_end - storage_start);
 
-    mb->residual_m = (mb->in_rain_m)
-                   - (mb->perc_m + mb->AET_m + mb->lateral_m)
-                   -  mb->delta_storage_m;
+    volbal->residual_m = (volbal->in_rain_m)
+                   - (volbal->perc_m + volbal->AET_m + volbal->lateral_m)
+                   -  volbal->delta_storage_m;
 
     return 0;
 }

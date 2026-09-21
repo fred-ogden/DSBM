@@ -1,0 +1,9 @@
+soil_depth_m=2.0[m]
+soil_Clapp_Hornberger_exponent_b=4.05[]
+soil_sat_hydraulic_conductivity_cm_per_h=1.2168[cm h-1]
+soil_saturated_capillary_head_calc_from_ksat=TRUE // Calculates Hc(cm) = 10.415*Ksat(cm/h)^(-0.3266)
+soil_effective_porosity=0.439[V V-1]
+soil_field_capacity_Pcap_over_Patm_0_1=0.333[P P-1]
+soil_reservoir_rate_const_to_subsurface_lateral_flow=0.000005[m h-1]
+soil_to_gw_percolation_rate_limiter_0_to_1=0.81[]
+state_soil_reservoir_init_storage_m=0.7843498367003[m]

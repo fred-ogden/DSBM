@@ -6,9 +6,9 @@
 
 /* -------- time-column mode for output files ------------------------ */
 typedef enum {
-    TC_INDEX = 0,   /* step counter */
-    TC_JD,          /* strict Julian date */
-    TC_YMDH         /* YYYY\u2011MM\u2011DD HH:MM */
+    TC_TIMESTEP = 0,   /* step counter */
+    TC_JULIANDATE,          /* strict Julian date */
+    TC_DATETIME         /* YYYY\u2011MM\u2011DD HH:MM */
 } TimeColMode;
 
 #ifndef MAX_PATH
@@ -20,10 +20,10 @@ typedef struct {
     char forcing_path[MAX_PATH];
     char outdir[MAX_PATH];
 
-    int  verbosity;          /* 0 silent, 1 MB/step, >1 verbose */
+    int  verbosity;          /* 0 silent, 1 volume balance/step, >1 verbose */
     int  write_theta;
     int  write_fluxes;
-    int  write_mb;
+    int  write_volbal;
 
     char solver[16];          /* dsbm or noahmp */
     int  apply_fc_perc_threshold; /* apply theta_fc threshold to bottom drainage */
@@ -52,9 +52,9 @@ typedef struct {
     int  have_forcing;
     int  have_outdir;
     int  have_cfe_config;
-    int  tindex_start;                 /* --tindex-start */
-    char  params_path[MAX_PATH];        /* optional separate params file */
-    int   have_params;                  /* bool flag, like have_dz */
+    int  timestep_start;                 /* --timestep-start */
+    char  config_path[MAX_PATH];        /* optional separate params file */
+    int   have_config;                  /* bool flag, like have_dz */
     
 } DriverOpts;
 

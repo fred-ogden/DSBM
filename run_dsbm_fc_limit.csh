@@ -1,30 +1,27 @@
 #!/bin/tcsh
 # Run the stateless DSBM soil column driver with full output
 
-set force   = "10x_hourly_rainfall_PET.txt"
+set force   = "forcing/rain_pet_example.csv"
 set outdir  = "output/dsbm_fc_limit"
 set dz      = "0.1,0.3,0.6,1.0"
 set zc      = "0.05,0.25,0.7,1.5"
-set store0  = "0.34"         # target initial storage (m)
 set verb    = "1"            # stdout verbosity
-set tstart  = "0"            # starting index column
-set timecol = "index"        # choose index | jd | ymdh
+set timecol = "datetime"     # choose timestep | datetime | juliandate
 
 rm -rf "$outdir"
 mkdir -p "$outdir"
 
 bin/soil_driver \
+  --config configs/soil_params.dat \
   --solver dsbm \
   --apply-fc-perc-threshold \
   --forcing "$force" \
   --outdir "$outdir" \
   --verbosity $verb \
-  --write-theta --write-fluxes --write-mb \
-  --timecol $timecol --tindex-start $tstart \
+  --write-theta --write-fluxes --write-volbal \
+  --timestamp $timecol \
   --use-lut --lut-n 400 --lut-Theta-min 1e-6 \
   --dz "$dz" --zc "$zc" \
-  --init-target-storage $store0
-
 set run_status = $status
 
 if ($run_status != 0) then

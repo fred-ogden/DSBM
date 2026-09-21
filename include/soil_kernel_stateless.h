@@ -16,7 +16,7 @@ int soil_step_one_hour_stateless(
     const SoilForcing        *forcing,
     SoilStateOut             *sout,
     SoilFluxes               *flux,
-    TimestepSoilMassbal      *mb,
+    TimestepSoilVolumeBalance      *volbal,
     FILE                     *debug_fptr);
 
 #ifdef __cplusplus
