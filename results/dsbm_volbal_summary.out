@@ -1,0 +1,22 @@
+Solver: DSBM
+
+**************** DSBM SOIL VOLUME BALANCE ****************
+
+ Initial soil volume                    =     0.7942 m
+ Precipitation input (QINSUR)            =    10.7855 m
+ Surface precipitation excess            =     0.1369 m
+ Infiltrated precipitation               =    10.6485 m
+ Evapotranspiration                      =     4.0148 m
+ Lateral flow generated                  =     0.5372 m
+ Percolation to g.w.                     =     6.3368 m
+ Final soil volume                      =     0.5540 m
+ Volume balance residual                = 1.4677e-13 m
+ Residual as percent of input rainfall  = 1.3608e-12 percent
+
+***************** SIMULATION INFORMATION ******************
+
+ Simulation duration                    =      78168 h
+ Output timestep                        = hourly
+ Total number of sub-timesteps          =      92538
+ Mean sub-timesteps per output step     =      1.184
+ Simulation wall-clock time             =      0.691 s
