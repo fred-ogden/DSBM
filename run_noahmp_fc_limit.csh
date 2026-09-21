@@ -20,7 +20,7 @@ bin/soil_driver \
   --verbosity $verb \
   --write-theta --write-fluxes --write-volbal \
   --timestamp $timecol \
-  --dz "$dz" --zc "$zc" \
+  --dz "$dz" --zc "$zc" 
 
 set run_status = $status
 

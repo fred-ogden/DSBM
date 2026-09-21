@@ -21,7 +21,7 @@ bin/soil_driver \
   --write-theta --write-fluxes --write-volbal \
   --timestamp $timecol \
   --use-lut --lut-n 400 --lut-Theta-min 1e-6 \
-  --dz "$dz" --zc "$zc" \
+  --dz "$dz" --zc "$zc" 
 set run_status = $status
 
 if ($run_status != 0) then
