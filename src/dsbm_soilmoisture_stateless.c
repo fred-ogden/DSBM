@@ -1,5 +1,37 @@
+/*
+ * dsbm_soilmoisture_stateless.c
+ *
+ * Stateless Discrete Soil Moisture Balance Model (DSBM) calculation kernel.
+ *
+ * Discrete Soil Moisture Balance Model (DSBM)
+ *
+ * Author:
+ *   Fred L. Ogden, Ph.D., P.E.
+ *   NOAA/National Weather Service
+ *
+ * This software was developed by an employee of the United States
+ * Government as part of official duties and is not subject to
+ * copyright protection in the United States under 17 U.S.C. Section 105.
+ *
+ * License:
+ *   Apache License, Version 2.0
+ *   SPDX-License-Identifier: Apache-2.0
+ *
+ * See the repository LICENSE file for additional information.
+ */
+
 // ====================================================================
-// Stateless soil step (BMI kernel) NDISC generic
+// Stateless discrete soil moisture balance module (DSBM) kernel) to 
+// mimic the soil moisture flux routines use in Noah-MP.  Solves fluxes 
+// between four soil discretizations (NDISC=4) that are the same thickness
+// as those used in Noah-MP (0.1m, 0.3m, 0.6m, 1.0m).  My be used with
+// other disc geometry, but won't be equivalent to Noah-MP.   
+//
+// This code calculates the Darcy-Buckingham flux between cells and applies
+// a finite volume forward-Euler solution with time step controls.  This
+// scheme is guaranteed to conserve mass.  It allows sinks due to plant
+// water uptake and conceptual lateral flow.
+//
 // Positive vertical flux is downward.
 // Units:
 //   theta: m3/m3
@@ -8,10 +40,19 @@
 //   rainfall, PET inputs: mm/h (converted to m/h inside)
 //   step-integrated totals: m
 //   rates: m/h
+// 
+// Validated and found to mimic the soil moisture form of the Richards'
+// equation used in Noah-MP with both NSE and KGE >0.998 on internal fluxes,
+// soil moisture contents, and percolation flux out of the bottom of the
+// soil domain.
+//
+// Author: Fred L. Ogden, Ph.D., P.E., Chief Scientist, NOAA/NWS OWP
+//         National Water Center, Tuscaloosa, Alabama
+//         2025-2026
 // ====================================================================
 
 #include <math.h>
-#include "soil_kernel_stateless.h"
+#include "dsbm_soilmoisture_stateless.h"
 #include "soil_helpers.h"
 
 #ifndef THETA_MIN
@@ -108,7 +149,7 @@ int soil_step_one_hour_stateless(
     }
     flux->percolation_to_gw_m = 0.0;
     flux->rain_into_soil_m    = 0.0;
-    flux->rain_excess_m       = 0.0;
+    flux->surface_precipitation_excess_m       = 0.0;
     flux->n_sub_used          = 0;
 
     volbal->in_rain_m       = 0.0;
@@ -172,7 +213,7 @@ int soil_step_one_hour_stateless(
         if (theta[0] > par->theta_sat) theta[0] = par->theta_sat;
 
         flux->rain_into_soil_m += used;
-        flux->rain_excess_m    += excess;
+        flux->surface_precipitation_excess_m    += excess;
 
         // D2) properties after rainfall addition (LUT or analytic)
         int hint_local[NDISC];
@@ -247,9 +288,7 @@ int soil_step_one_hour_stateless(
 
                 if (V > max_out) V = max_out;
                 if (V > donor_avail) V = donor_avail;
-     /*************** BUG FOUND AND FIXED IN CFE: 
-                if (V > recv_space + chain_pass) V = recv_space + chain_pass; */
-                if (V > recv_space) V = recv_space;  // fixed.
+                if (V > recv_space) V = recv_space; 
                 if (V < 0.0) V = 0.0;
 
                 theta[i]   -= V / geom->dz[i];
@@ -311,11 +350,27 @@ int soil_step_one_hour_stateless(
 
         double et_this_sub = 0.0;
 
+        /*
+         * Distribute PET equally among the root-zone discs, consistent
+         * with the Noah-MP soil-moisture formulation that DSBM was
+         * developed to mimic.  Each disc independently realizes its
+         * assigned fraction of PET according to its local soil-moisture
+         * stress.
+         *
+         * Field capacity defines the moisture content at and above which
+         * AET equals the assigned PET demand.  Between field capacity and
+         * wilting point, AET decreases linearly to zero.  Using theta_fc
+         * as the stress-onset threshold avoids an additional calibration
+         * parameter.
+         *
+         * Extraction from any disc is limited so that theta cannot fall
+         * below the wilting point during the substep.
+         */
         for (int i = 0; i < nroot; i++) {
             double root_frac = 1.0 / (double)nroot;
 
             double th = theta[i];
-            double f_aet;  // fraction of PET realized
+            double f_aet;  // fraction of assigned PET realized
             if (th <= par->theta_wp)                  f_aet = 0.0;
             else if (th >= par->theta_aet_eq_pet)     f_aet = 1.0;
             else                                      f_aet = (th - par->theta_wp) / denom;
@@ -367,7 +422,7 @@ int soil_step_one_hour_stateless(
     const double storage_end = storage_sum_ndisc(theta, geom->dz);
 
     volbal->in_rain_m  = flux->rain_into_soil_m;
-    volbal->excess_m   = flux->rain_excess_m;
+    volbal->excess_m   = flux->surface_precipitation_excess_m;
     volbal->perc_m     = flux->percolation_to_gw_m;
 
     // total lateral already accumulated in volbal->lateral_m inside loop

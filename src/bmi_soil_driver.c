@@ -1,3 +1,25 @@
+/*
+ * bmi_soil_driver.c
+ *
+ * Command-line driver for DSBM and Noah-MP soil-moisture comparison calculations.
+ *
+ * Discrete Soil Moisture Balance Model (DSBM)
+ *
+ * Author:
+ *   Fred L. Ogden, Ph.D., P.E.
+ *   NOAA/National Weather Service
+ *
+ * This software was developed by an employee of the United States
+ * Government as part of official duties and is not subject to
+ * copyright protection in the United States under 17 U.S.C. Section 105.
+ *
+ * License:
+ *   Apache License, Version 2.0
+ *   SPDX-License-Identifier: Apache-2.0
+ *
+ * See the repository LICENSE file for additional information.
+ */
+
 #define _POSIX_C_SOURCE 200809L
 
 /* src/bmi_soil_driver.c
@@ -13,7 +35,7 @@
  *
  * Build example:
  *   cc -O3 -std=c11 -Wall -Wextra -Iinclude \
- *      src/soil_helpers.c src/soil_kernel_stateless.c src/bmi_soil_driver.c -o soil_driver
+ *      src/soil_helpers.c src/dsbm_soilmoisture_stateless.c src/bmi_soil_driver.c -o soil_driver
  *
  * Example run:
  *   ./soil_driver \
@@ -29,8 +51,8 @@
 #include <strings.h>
 #include "soil_data_types.h"
 #include "soil_helpers.h"
-#include "soil_kernel_stateless.h"
-#include "noahmp_soilwater_stateless.h"
+#include "dsbm_soilmoisture_stateless.h"
+#include "noahmp_soilmoisture_stateless.h"
 #include "soil_cli.h"
 #include "util.h"
 

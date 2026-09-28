@@ -1,3 +1,25 @@
+/*
+ * dsbm_soilmoisture_stateless.h
+ *
+ * Public interface for the stateless DSBM soil-moisture calculation kernel.
+ *
+ * Discrete Soil Moisture Balance Model (DSBM)
+ *
+ * Author:
+ *   Fred L. Ogden, Ph.D., P.E.
+ *   NOAA/National Weather Service
+ *
+ * This software was developed by an employee of the United States
+ * Government as part of official duties and is not subject to
+ * copyright protection in the United States under 17 U.S.C. Section 105.
+ *
+ * License:
+ *   Apache License, Version 2.0
+ *   SPDX-License-Identifier: Apache-2.0
+ *
+ * See the repository LICENSE file for additional information.
+ */
+
 #ifndef SOIL_KERNEL_STATELESS_H
 #define SOIL_KERNEL_STATELESS_H
 

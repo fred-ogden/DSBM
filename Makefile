@@ -30,8 +30,8 @@ DRIVER   := $(BINDIR)/soil_driver
 # ---- Sources ----
 LIB_SRC  := \
   $(SRCDIR)/soil_helpers.c \
-  $(SRCDIR)/soil_kernel_stateless.c \
-  $(SRCDIR)/noahmp_soilwater_stateless.c \
+  $(SRCDIR)/dsbm_soilmoisture_stateless.c \
+  $(SRCDIR)/noahmp_soilmoisture_stateless.c \
   $(SRCDIR)/util.c
 
 DRV_SRC  := \

@@ -1,3 +1,25 @@
+/*
+ * soil_config.h
+ *
+ * Compile-time configuration constants for the soil-moisture calculation modules.
+ *
+ * Discrete Soil Moisture Balance Model (DSBM)
+ *
+ * Author:
+ *   Fred L. Ogden, Ph.D., P.E.
+ *   NOAA/National Weather Service
+ *
+ * This software was developed by an employee of the United States
+ * Government as part of official duties and is not subject to
+ * copyright protection in the United States under 17 U.S.C. Section 105.
+ *
+ * License:
+ *   Apache License, Version 2.0
+ *   SPDX-License-Identifier: Apache-2.0
+ *
+ * See the repository LICENSE file for additional information.
+ */
+
 #ifndef SOIL_CONFIG_H
 #define SOIL_CONFIG_H
 

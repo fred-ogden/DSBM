@@ -1,3 +1,25 @@
+/*
+ * soil_data_types.h
+ *
+ * Shared data structures for DSBM and Noah-MP soil-moisture calculations.
+ *
+ * Discrete Soil Moisture Balance Model (DSBM)
+ *
+ * Author:
+ *   Fred L. Ogden, Ph.D., P.E.
+ *   NOAA/National Weather Service
+ *
+ * This software was developed by an employee of the United States
+ * Government as part of official duties and is not subject to
+ * copyright protection in the United States under 17 U.S.C. Section 105.
+ *
+ * License:
+ *   Apache License, Version 2.0
+ *   SPDX-License-Identifier: Apache-2.0
+ *
+ * See the repository LICENSE file for additional information.
+ */
+
 #ifndef SOIL_TYPES_H
 #define SOIL_TYPES_H
 
@@ -69,7 +91,7 @@ typedef struct {
     double lateral_by_disc_m[NDISC];
     double percolation_to_gw_m;
     double rain_into_soil_m;
-    double rain_excess_m;
+    double surface_precipitation_excess_m;
 
     // Internal vertical exchanges: [0..NDISC-2] interfaces i\u2192i+1; [NDISC-1] bottom perc
     double interface_vol_m[NDISC];

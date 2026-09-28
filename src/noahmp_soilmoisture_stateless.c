@@ -1,5 +1,27 @@
 /*
- * noahmp_soilwater_stateless.c
+ * noahmp_soilmoisture_stateless.c
+ *
+ * Stateless Noah-MP soil-moisture solver used for controlled comparison with DSBM.
+ *
+ * Discrete Soil Moisture Balance Model (DSBM)
+ *
+ * Author:
+ *   Fred L. Ogden, Ph.D., P.E.
+ *   NOAA/National Weather Service
+ *
+ * This software was developed by an employee of the United States
+ * Government as part of official duties and is not subject to
+ * copyright protection in the United States under 17 U.S.C. Section 105.
+ *
+ * License:
+ *   Apache License, Version 2.0
+ *   SPDX-License-Identifier: Apache-2.0
+ *
+ * See the repository LICENSE file for additional information.
+ */
+
+/*
+ * noahmp_soilmoisture_stateless.c
  *
  * Compact C99 translation of the unfrozen Noah-MP soil-moisture Richards
  * solver used for a controlled comparison with the DSBM kernel.
@@ -28,7 +50,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "noahmp_soilwater_stateless.h"
+#include "noahmp_soilmoisture_stateless.h"
 
 #ifndef THETA_MIN
 #define THETA_MIN 1.0e-03
@@ -56,16 +78,18 @@ static void noahmp_wdfcnd1(const SoilParameters *par, double theta,
     double factr;
     double ksat_m_per_s;
     double phi_sat_m;
-    double dwsat_m2_per_s;
+    double saturated_soil_hydraulic_diffusivity_m2_per_s;
 
     factr = theta / par->theta_sat;
     if (factr < 0.01) factr = 0.01;
 
     ksat_m_per_s = (par->K_sat_cm_per_h / 100.0) / 3600.0;
     phi_sat_m = par->phi_sat_cm / 100.0;
-    dwsat_m2_per_s = par->b_exp * ksat_m_per_s * phi_sat_m / par->theta_sat;
+    saturated_soil_hydraulic_diffusivity_m2_per_s = 
+                   par->b_exp * ksat_m_per_s * phi_sat_m / par->theta_sat;
 
-    *wdf_m2_per_s = dwsat_m2_per_s * pow(factr, par->b_exp + 2.0);
+    *wdf_m2_per_s = saturated_soil_hydraulic_diffusivity_m2_per_s * 
+                    pow(factr, par->b_exp + 2.0);
     *wcnd_m_per_s = ksat_m_per_s * pow(factr, 2.0 * par->b_exp + 3.0);
 }
 
@@ -435,13 +459,13 @@ int noahmp_soil_step_one_hour_stateless(
                                         / ctrl->dt_hours;
     }
 
-    flux->rain_excess_m = total_saturation_excess_m;
-    flux->rain_into_soil_m = rain_m_per_s * dt_s - flux->rain_excess_m;
+    flux->surface_precipitation_excess_m = total_saturation_excess_m;
+    flux->rain_into_soil_m = rain_m_per_s * dt_s - flux->surface_precipitation_excess_m;
     if (flux->rain_into_soil_m < 0.0) flux->rain_into_soil_m = 0.0;
 
     storage_end = storage_sum(theta, geom->dz, ndisc);
     volbal->in_rain_m = flux->rain_into_soil_m;
-    volbal->excess_m = flux->rain_excess_m;
+    volbal->excess_m = flux->surface_precipitation_excess_m;
     volbal->perc_m = flux->percolation_to_gw_m;
     /* volbal->lateral_m was accumulated from the per-disc Richards sinks. */
     volbal->delta_storage_m = storage_end - storage_start;
