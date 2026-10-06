@@ -23,6 +23,7 @@
 #ifndef NOAHMP_SOILWATER_STATELESS_H
 #define NOAHMP_SOILWATER_STATELESS_H
 
+#include <stdio.h>
 #include "soil_data_types.h"
 
 #ifdef __cplusplus

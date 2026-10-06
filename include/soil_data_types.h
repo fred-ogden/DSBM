@@ -23,7 +23,6 @@
 #ifndef SOIL_TYPES_H
 #define SOIL_TYPES_H
 
-#include <stdio.h>
 #include "soil_config.h"
 
 #ifdef __cplusplus

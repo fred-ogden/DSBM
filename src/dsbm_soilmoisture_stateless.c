@@ -130,10 +130,8 @@ int soil_step_one_hour_stateless(
     const SoilForcing        *forcing,
     SoilStateOut             *sout,
     SoilFluxes               *flux,
-    TimestepSoilVolumeBalance      *volbal,
-    FILE                     *debug_fptr)
+    TimestepSoilVolumeBalance      *volbal)
 {
-    (void)debug_fptr;
 
     // ---- local working state ------------------------------------------------
     double theta[NDISC];
@@ -167,10 +165,13 @@ int soil_step_one_hour_stateless(
     const double rain_rate_m_per_h = forcing->rain_mm_per_h / 1000.0;
     const double pet_rate_m_per_h  = forcing->pet_mm_per_h  / 1000.0;
 
-    const double theta_floor = fmax(THETA_MIN, par->theta_r);
+    double theta_floor;
+
+    theta_floor = fmax(THETA_MIN, par->theta_r);
 
     // A) storage at start
-    const double storage_start = storage_sum_ndisc(theta, geom->dz);
+    double storage_start;
+    storage_start = storage_sum_ndisc(theta, geom->dz);
 
     // B) initial fluxes and n_sub
     double q0[NDISC > 1 ? NDISC-1 : 1];
@@ -231,7 +232,8 @@ int soil_step_one_hour_stateless(
 
         // D3) interface fluxes and desired substep volumes
         for (int i = 0; i < nintf; i++) {
-            const double q = flux_DB_pair(psi[i], K[i], psi[i+1], K[i+1],
+            double q;
+            q = flux_DB_pair(psi[i], K[i], psi[i+1], K[i+1],
                                           geom->dz[i], geom->dz[i+1]);
             V_if[i] = q * dt_sub;
             pot_downflux[i] = (q > 0.0) ? (q * dt_sub) : 0.0;
@@ -419,7 +421,8 @@ int soil_step_one_hour_stateless(
     for (int i = 0; i < NDISC; i++) sout->theta_out[i] = theta[i];
 
     // volume balance
-    const double storage_end = storage_sum_ndisc(theta, geom->dz);
+    double storage_end;
+    storage_end = storage_sum_ndisc(theta, geom->dz);
 
     volbal->in_rain_m  = flux->rain_into_soil_m;
     volbal->excess_m   = flux->surface_precipitation_excess_m;

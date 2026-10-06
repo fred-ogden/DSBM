@@ -759,7 +759,7 @@ int main(int argc, char **argv)
         } else {
             rc = soil_step_one_hour_stateless(
                 &ctrl, &geom, &par, (opt.use_lut ? &lut : NULL),
-                &sin, &forcing, &sout, &flux, &volbal, NULL);
+                &sin, &forcing, &sout, &flux, &volbal);
             if (rc != 0) die("soil_step_one_hour_stateless failed");
         }
 
