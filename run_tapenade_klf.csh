@@ -55,7 +55,11 @@ rm -rf $work_dir
 mkdir -p $gen_dir
 cp include/*.h $work_dir/
 ( echo "#define NDISC $ndisc" ; cat include/soil_config.h ) >! $work_dir/soil_config.h
-cp tapenade_klf_primal.c src/dsbm_soilmoisture_stateless.c src/soil_helpers.c $work_dir/
+# soil_helpers.c tests NDISC on its first lines, before any #include,
+# so the definition must be at the top of each copied source file too.
+foreach source_file ( tapenade_klf_primal.c src/dsbm_soilmoisture_stateless.c src/soil_helpers.c )
+    ( echo "#define NDISC $ndisc" ; cat $source_file ) >! $work_dir/$source_file:t
+end
 
 echo "==== 3. running Tapenade (tangent mode)"
 cd $work_dir
@@ -64,6 +68,7 @@ tapenade -tangent \
     -O generated \
     tapenade_klf_primal.c dsbm_soilmoisture_stateless.c soil_helpers.c \
     >& generated/tapenade.log
+cp generated/tapenade.log generated/tapenade_head_form.log
 
 # find the generated file that defines the head's tangent
 set head_file = `grep -ls "${head_function}_d *(" generated/*_d.c`
@@ -82,7 +87,10 @@ endif
 cd ../..
 
 if ( "$head_file" == "" ) then
-    echo "ERROR: Tapenade did not produce ${head_function}_d.  Tapenade log:"
+    echo "ERROR: Tapenade did not produce ${head_function}_d."
+    echo "---- log of first attempt (-head form):"
+    cat $gen_dir/tapenade_head_form.log
+    echo "---- log of second attempt (-vars/-outvars form):"
     cat $gen_dir/tapenade.log
     exit 1
 endif
