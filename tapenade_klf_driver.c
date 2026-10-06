@@ -39,8 +39,20 @@
  *       forcing/rain_pet_example.csv).  First representative
  *       calibration derivative of the static k_lf parameter.
  *
+ *   E5  Adaptive n_sub boundaries with the E4 observed forcing:
+ *       a) dense k_lf sweep with production adaptive n_sub, comparing the
+ *          actual change between neighbouring k_lf values with the change
+ *          predicted by the AD derivative, separately for intervals with
+ *          and without an n_sub switch;
+ *       b) the worst switch located by bisection: the jump in every
+ *          output, AD on each side, and centered FD straddling it;
+ *       c) the same sweep with fixed n_sub = 12;
+ *       d) adaptive versus fixed n_sub = 12 values and derivatives.
+ *
  * Usage:
- *   tapenade_klf_derivative_test  output_directory  forcing_csv_file
+ *   tapenade_klf_derivative_test  output_directory  forcing_csv_file  [experiments]
+ *
+ *   experiments is a string of digits, default "12345"; e.g. "5" runs E5 only.
  *
  * Terminology: soil moisture; discs; cost function.
  * ASCII only.
@@ -65,6 +77,7 @@ double klf_experiment_phi_sat_cm(void);
 void dsbm_lateral_from_klf(double klf_m_per_h,
                            const double *theta_in,
                            int n_steps,
+                           int n_sub_fixed,
                            const double *rain_mm_per_h,
                            const double *pet_mm_per_h,
                            double *lateral_total_by_disc_m,
@@ -77,6 +90,7 @@ void dsbm_lateral_from_klf(double klf_m_per_h,
 void klf_tangent_from_tapenade(double klf_m_per_h,
                                const double *theta_in,
                                int n_steps,
+                               int n_sub_fixed,
                                const double *rain_mm_per_h,
                                const double *pet_mm_per_h,
                                double *lateral_total_by_disc_m,
@@ -133,10 +147,14 @@ static const char *output_label[N_OUTPUTS] = {
 /* Packing helpers                                                     */
 /* ------------------------------------------------------------------ */
 
-/* Run the primal wrapper and pack all dependents into one vector. */
-static void evaluate_primal(double klf_m_per_h,
+/*
+ * Run the primal wrapper and pack all dependents into one vector.
+ * n_sub_fixed = 0 uses production adaptive substeps.
+ */
+static void evaluate_primal_nsub(double klf_m_per_h,
                             const double *theta_in,
                             int n_steps,
+                            int n_sub_fixed,
                             const double *rain_mm_per_h,
                             const double *pet_mm_per_h,
                             double *output_vector,
@@ -149,7 +167,7 @@ static void evaluate_primal(double klf_m_per_h,
     double excess_m;
     int i_disc;
 
-    dsbm_lateral_from_klf(klf_m_per_h, theta_in, n_steps,
+    dsbm_lateral_from_klf(klf_m_per_h, theta_in, n_steps, n_sub_fixed,
                           rain_mm_per_h, pet_mm_per_h,
                           lateral_m, theta_out, &perc_m, &aet_m, &excess_m,
                           n_sub_used_by_step);
@@ -164,9 +182,10 @@ static void evaluate_primal(double klf_m_per_h,
 }
 
 /* Run the Tapenade tangent (seed d(klf)=1) and pack values and derivatives. */
-static void evaluate_tangent(double klf_m_per_h,
+static void evaluate_tangent_nsub(double klf_m_per_h,
                              const double *theta_in,
                              int n_steps,
+                             int n_sub_fixed,
                              const double *rain_mm_per_h,
                              const double *pet_mm_per_h,
                              double *output_vector,
@@ -185,7 +204,7 @@ static void evaluate_tangent(double klf_m_per_h,
     double d_excess_m;
     int i_disc;
 
-    klf_tangent_from_tapenade(klf_m_per_h, theta_in, n_steps,
+    klf_tangent_from_tapenade(klf_m_per_h, theta_in, n_steps, n_sub_fixed,
                               rain_mm_per_h, pet_mm_per_h,
                               lateral_m, d_lateral_m,
                               theta_out, d_theta_out,
@@ -206,6 +225,34 @@ static void evaluate_tangent(double klf_m_per_h,
     d_output_d_klf[IDX_PERC] = d_perc_m;
     d_output_d_klf[IDX_AET] = d_aet_m;
     d_output_d_klf[IDX_EXCESS] = d_excess_m;
+}
+
+/* Production adaptive-substep versions used by E1-E4. */
+static void evaluate_primal(double klf_m_per_h,
+                            const double *theta_in,
+                            int n_steps,
+                            const double *rain_mm_per_h,
+                            const double *pet_mm_per_h,
+                            double *output_vector,
+                            int *n_sub_used_by_step)
+{
+    evaluate_primal_nsub(klf_m_per_h, theta_in, n_steps, 0,
+                         rain_mm_per_h, pet_mm_per_h,
+                         output_vector, n_sub_used_by_step);
+}
+
+static void evaluate_tangent(double klf_m_per_h,
+                             const double *theta_in,
+                             int n_steps,
+                             const double *rain_mm_per_h,
+                             const double *pet_mm_per_h,
+                             double *output_vector,
+                             double *d_output_d_klf,
+                             int *n_sub_used_by_step)
+{
+    evaluate_tangent_nsub(klf_m_per_h, theta_in, n_steps, 0,
+                          rain_mm_per_h, pet_mm_per_h,
+                          output_vector, d_output_d_klf, n_sub_used_by_step);
 }
 
 /*
@@ -881,19 +928,466 @@ static void experiment_4_observed_forcing(const char *output_dir,
 
 
 /* ------------------------------------------------------------------ */
+/* E5: adaptive n_sub boundaries versus fixed n_sub                    */
+/* ------------------------------------------------------------------ */
+
+#define E5_N_SWEEP              2000
+#define E5_LOG10_KLF_MIN        (-4.0)
+#define E5_LOG10_KLF_MAX        (-1.0)
+#define E5_FIXED_N_SUB          12
+#define E5_N_KEY_OUTPUTS        3
+
+/*
+ * Scalar outputs used to judge the sweep.  Total lateral flow is the sum
+ * over discs; percolation and bottom-disc soil moisture are taken from
+ * the output vector.
+ */
+static double total_lateral_from_vector(const double *output_vector)
+{
+    double total_m;
+    int i_disc;
+
+    total_m = 0.0;
+    for (i_disc = 0; i_disc < NDISC; i_disc++) {
+        total_m = total_m + output_vector[IDX_LATERAL_0 + i_disc];
+    }
+    return total_m;
+}
+
+static void key_outputs(const double *output_vector, double *key)
+{
+    key[0] = total_lateral_from_vector(output_vector);
+    key[1] = output_vector[IDX_PERC];
+    key[2] = output_vector[IDX_THETA_0 + NDISC - 1];
+}
+
+static const char *key_label[E5_N_KEY_OUTPUTS] = {
+    "lateral_total_m", "percolation_to_gw_m", "theta_out[3]"
+};
+
+static int compare_doubles_ascending(const void *a, const void *b)
+{
+    double da = *(const double *)a;
+    double db = *(const double *)b;
+
+    if (da < db) return -1;
+    if (da > db) return 1;
+    return 0;
+}
+
+/* number of timesteps whose n_sub differs between two sequences */
+static int count_n_sub_differences(const int *a, const int *b, int n_steps)
+{
+    int n_differ;
+    int i_step;
+
+    n_differ = 0;
+    for (i_step = 0; i_step < n_steps; i_step++) {
+        if (a[i_step] != b[i_step]) n_differ++;
+    }
+    return n_differ;
+}
+
+/*
+ * Summary of one k_lf sweep.  For each interval between neighbouring
+ * k_lf values the actual change in a key output is compared with the
+ * change predicted by trapezoidal integration of the AD derivative:
+ *
+ *   mismatch = [y(k2) - y(k1)] - 0.5*(dy/dk(k1) + dy/dk(k2))*(k2 - k1)
+ *
+ * and expressed as an EQUIVALENT RELATIVE CHANGE IN k_lf:
+ *
+ *   equiv_dk_over_k = |mismatch| / ( max|dy/dk| * k )
+ *
+ * i.e. the fractional change in k_lf that would move the output by the
+ * same amount through the smooth derivative.  On smooth intervals this is
+ * a tiny trapezoid error; at a slope kink it is at most of order the grid
+ * spacing dk/k; at an n_sub switch it measures the jump.  A calibration
+ * step smaller than this value cannot see the true gradient through the
+ * jump.
+ */
+#define E5_TINY_DERIVATIVE      1.0e-12
+
+typedef struct {
+    int n_intervals;
+    int n_intervals_with_n_sub_change;
+    double max_rel_mismatch_smooth[E5_N_KEY_OUTPUTS];
+    double max_rel_mismatch_switch[E5_N_KEY_OUTPUTS];
+    double median_rel_mismatch_smooth[E5_N_KEY_OUTPUTS];
+    double median_rel_mismatch_switch[E5_N_KEY_OUTPUTS];
+    double worst_switch_klf_low;
+    double worst_switch_klf_high;
+    double worst_switch_rel_mismatch;
+    long total_substeps_at_first_point;
+} SweepSummary;
+
+static void sweep_klf(int n_sub_fixed,
+                      const double *theta_in,
+                      int n_steps,
+                      const double *rain_mm_per_h,
+                      const double *pet_mm_per_h,
+                      FILE *fp,
+                      SweepSummary *summary)
+{
+    static int n_sub_previous[MAX_STEPS];
+    static int n_sub_current[MAX_STEPS];
+    static double smooth_values[E5_N_KEY_OUTPUTS][E5_N_SWEEP];
+    static double switch_values[E5_N_KEY_OUTPUTS][E5_N_SWEEP];
+    int n_smooth_values[E5_N_KEY_OUTPUTS];
+    int n_switch_values[E5_N_KEY_OUTPUTS];
+    double y_previous[N_OUTPUTS];
+    double dy_previous[N_OUTPUTS];
+    double y_current[N_OUTPUTS];
+    double dy_current[N_OUTPUTS];
+    double key_previous[E5_N_KEY_OUTPUTS];
+    double key_current[E5_N_KEY_OUTPUTS];
+    double dkey_previous[E5_N_KEY_OUTPUTS];
+    double dkey_current[E5_N_KEY_OUTPUTS];
+    double klf_previous;
+    int i_pt;
+    int k;
+
+    summary->n_intervals = 0;
+    summary->n_intervals_with_n_sub_change = 0;
+    for (k = 0; k < E5_N_KEY_OUTPUTS; k++) {
+        summary->max_rel_mismatch_smooth[k] = 0.0;
+        summary->max_rel_mismatch_switch[k] = 0.0;
+        summary->median_rel_mismatch_smooth[k] = 0.0;
+        summary->median_rel_mismatch_switch[k] = 0.0;
+        n_smooth_values[k] = 0;
+        n_switch_values[k] = 0;
+    }
+    summary->worst_switch_klf_low = 0.0;
+    summary->worst_switch_klf_high = 0.0;
+    summary->worst_switch_rel_mismatch = -1.0;
+    summary->total_substeps_at_first_point = 0;
+
+    fprintf(fp, "klf_m_per_h,lateral_total_m,AD_lateral_total,percolation_m,AD_percolation,"
+                "theta3,AD_theta3,n_sub_total,n_steps_changed_from_previous,"
+                "equiv_dk_over_k_lateral,equiv_dk_over_k_percolation,equiv_dk_over_k_theta3\n");
+
+    klf_previous = 0.0;
+    for (i_pt = 0; i_pt < E5_N_SWEEP; i_pt++) {
+        double log10_klf = E5_LOG10_KLF_MIN +
+            (E5_LOG10_KLF_MAX - E5_LOG10_KLF_MIN) * (double)i_pt / (double)(E5_N_SWEEP - 1);
+        double klf = pow(10.0, log10_klf);
+        double rel_mismatch[E5_N_KEY_OUTPUTS];
+        long n_sub_total;
+        int n_steps_changed;
+        int i_step;
+
+        evaluate_tangent_nsub(klf, theta_in, n_steps, n_sub_fixed,
+                              rain_mm_per_h, pet_mm_per_h,
+                              y_current, dy_current, n_sub_current);
+        key_outputs(y_current, key_current);
+        dkey_current[0] = total_lateral_from_vector(dy_current);
+        dkey_current[1] = dy_current[IDX_PERC];
+        dkey_current[2] = dy_current[IDX_THETA_0 + NDISC - 1];
+
+        n_sub_total = 0;
+        for (i_step = 0; i_step < n_steps; i_step++) {
+            n_sub_total = n_sub_total + n_sub_current[i_step];
+        }
+        if (i_pt == 0) summary->total_substeps_at_first_point = n_sub_total;
+
+        n_steps_changed = 0;
+        for (k = 0; k < E5_N_KEY_OUTPUTS; k++) rel_mismatch[k] = 0.0;
+
+        if (i_pt > 0) {
+            double dk = klf - klf_previous;
+            double interval_worst = 0.0;
+
+            n_steps_changed = count_n_sub_differences(n_sub_previous, n_sub_current, n_steps);
+            summary->n_intervals++;
+            if (n_steps_changed > 0) summary->n_intervals_with_n_sub_change++;
+
+            for (k = 0; k < E5_N_KEY_OUTPUTS; k++) {
+                double predicted = 0.5 * (dkey_previous[k] + dkey_current[k]) * dk;
+                double actual = key_current[k] - key_previous[k];
+                double derivative_scale = fabs(dkey_previous[k]);
+
+                if (fabs(dkey_current[k]) > derivative_scale)
+                    derivative_scale = fabs(dkey_current[k]);
+                if (derivative_scale < E5_TINY_DERIVATIVE) continue;
+
+                rel_mismatch[k] = fabs(actual - predicted) / (derivative_scale * klf);
+
+                if (n_steps_changed > 0) {
+                    if (rel_mismatch[k] > summary->max_rel_mismatch_switch[k])
+                        summary->max_rel_mismatch_switch[k] = rel_mismatch[k];
+                    switch_values[k][n_switch_values[k]] = rel_mismatch[k];
+                    n_switch_values[k]++;
+                } else {
+                    if (rel_mismatch[k] > summary->max_rel_mismatch_smooth[k])
+                        summary->max_rel_mismatch_smooth[k] = rel_mismatch[k];
+                    smooth_values[k][n_smooth_values[k]] = rel_mismatch[k];
+                    n_smooth_values[k]++;
+                }
+                if (rel_mismatch[k] > interval_worst) interval_worst = rel_mismatch[k];
+            }
+
+            if (n_steps_changed > 0 &&
+                interval_worst > summary->worst_switch_rel_mismatch) {
+                summary->worst_switch_rel_mismatch = interval_worst;
+                summary->worst_switch_klf_low = klf_previous;
+                summary->worst_switch_klf_high = klf;
+            }
+        }
+
+        fprintf(fp, "%.12e,%.12e,%.12e,%.12e,%.12e,%.12e,%.12e,%ld,%d,%.4e,%.4e,%.4e\n",
+                klf, key_current[0], dkey_current[0], key_current[1], dkey_current[1],
+                key_current[2], dkey_current[2], n_sub_total, n_steps_changed,
+                rel_mismatch[0], rel_mismatch[1], rel_mismatch[2]);
+
+        /* current becomes previous */
+        klf_previous = klf;
+        for (k = 0; k < N_OUTPUTS; k++) {
+            y_previous[k] = y_current[k];
+            dy_previous[k] = dy_current[k];
+        }
+        for (k = 0; k < E5_N_KEY_OUTPUTS; k++) {
+            key_previous[k] = key_current[k];
+            dkey_previous[k] = dkey_current[k];
+        }
+        for (i_step = 0; i_step < n_steps; i_step++) {
+            n_sub_previous[i_step] = n_sub_current[i_step];
+        }
+    }
+    (void)y_previous;
+    (void)dy_previous;
+
+    for (k = 0; k < E5_N_KEY_OUTPUTS; k++) {
+        if (n_smooth_values[k] > 0) {
+            qsort(smooth_values[k], (size_t)n_smooth_values[k], sizeof(double),
+                  compare_doubles_ascending);
+            summary->median_rel_mismatch_smooth[k] = smooth_values[k][n_smooth_values[k] / 2];
+        }
+        if (n_switch_values[k] > 0) {
+            qsort(switch_values[k], (size_t)n_switch_values[k], sizeof(double),
+                  compare_doubles_ascending);
+            summary->median_rel_mismatch_switch[k] = switch_values[k][n_switch_values[k] / 2];
+        }
+    }
+}
+
+static void print_sweep_summary(const char *label, const SweepSummary *s)
+{
+    printf("\n%s: %d intervals, %d contain an n_sub switch in at least one timestep\n",
+           label, s->n_intervals, s->n_intervals_with_n_sub_change);
+    printf("   substeps per run at k_lf = 1e-4: %ld\n", s->total_substeps_at_first_point);
+    printf("   equivalent dk/k of (actual - AD-predicted change) per interval:\n");
+    printf("   %-22s %13s %13s %13s %13s\n", "output",
+           "smooth median", "smooth max", "switch median", "switch max");
+    for (int k = 0; k < E5_N_KEY_OUTPUTS; k++) {
+        printf("   %-22s %13.3e %13.3e %13.3e %13.3e\n", key_label[k],
+               s->median_rel_mismatch_smooth[k], s->max_rel_mismatch_smooth[k],
+               s->median_rel_mismatch_switch[k], s->max_rel_mismatch_switch[k]);
+    }
+}
+
+/*
+ * Bisect inside [klf_low, klf_high] for the k_lf at which the n_sub
+ * sequence switches, to near machine resolution.  Returns the two
+ * adjacent k_lf values bracketing the switch.
+ */
+static void bisect_n_sub_switch(double klf_low, double klf_high,
+                                const double *theta_in, int n_steps,
+                                const double *rain_mm_per_h,
+                                const double *pet_mm_per_h,
+                                double *klf_minus, double *klf_plus)
+{
+    static int n_sub_low[MAX_STEPS];
+    static int n_sub_mid[MAX_STEPS];
+    double y_scratch[N_OUTPUTS];
+    int iteration;
+
+    evaluate_primal_nsub(klf_low, theta_in, n_steps, 0, rain_mm_per_h,
+                         pet_mm_per_h, y_scratch, n_sub_low);
+
+    for (iteration = 0; iteration < 200; iteration++) {
+        double klf_mid = 0.5 * (klf_low + klf_high);
+
+        if (klf_mid <= klf_low || klf_mid >= klf_high) break;
+        evaluate_primal_nsub(klf_mid, theta_in, n_steps, 0, rain_mm_per_h,
+                             pet_mm_per_h, y_scratch, n_sub_mid);
+        if (count_n_sub_differences(n_sub_low, n_sub_mid, n_steps) == 0) {
+            klf_low = klf_mid;
+        } else {
+            klf_high = klf_mid;
+        }
+    }
+    *klf_minus = klf_low;
+    *klf_plus = klf_high;
+}
+
+static void experiment_5_n_sub_boundaries(const char *output_dir,
+                                          const char *forcing_path)
+{
+    static double rain_mm_per_h[E4_N_STEPS_H];
+    static double pet_mm_per_h[E4_N_STEPS_H];
+    static int n_sub_minus[MAX_STEPS];
+    static int n_sub_plus[MAX_STEPS];
+    const double compare_klf[3] = {BASELINE_KLF_M_PER_H, 1.0e-3, 1.0e-2};
+    double theta_in[NDISC];
+    double y_minus[N_OUTPUTS];
+    double dy_minus[N_OUTPUTS];
+    double y_plus[N_OUTPUTS];
+    double dy_plus[N_OUTPUTS];
+    double klf_minus;
+    double klf_plus;
+    int n_steps;
+    SweepSummary adaptive_summary;
+    SweepSummary fixed_summary;
+    FILE *fp;
+
+    n_steps = read_forcing_csv(forcing_path, E4_N_STEPS_H, rain_mm_per_h, pet_mm_per_h);
+    if (n_steps <= 0) {
+        printf("\nE5 skipped: could not read forcing file %s\n", forcing_path);
+        return;
+    }
+    baseline_entering_state(theta_in);
+
+    printf("\n====================================================================\n");
+    printf("E5  ADAPTIVE n_sub BOUNDARIES, OBSERVED FORCING, %d HOURS\n", n_steps);
+    printf("====================================================================\n");
+    printf("Sweep of %d log-spaced k_lf values, 1e-4 to 1e-1 m/h (dk/k = %.2e).\n",
+           E5_N_SWEEP,
+           pow(10.0, (E5_LOG10_KLF_MAX - E5_LOG10_KLF_MIN) / (double)(E5_N_SWEEP - 1)) - 1.0);
+
+    /* --- E5a adaptive sweep --- */
+    fp = open_csv(output_dir, "e5_sweep_adaptive.csv");
+    sweep_klf(0, theta_in, n_steps, rain_mm_per_h, pet_mm_per_h, fp, &adaptive_summary);
+    fclose(fp);
+    print_sweep_summary("E5a ADAPTIVE n_sub", &adaptive_summary);
+
+    /* --- E5b anatomy of the worst switch --- */
+    if (adaptive_summary.n_intervals_with_n_sub_change > 0) {
+        printf("\nE5b  WORST n_sub SWITCH, located by bisection\n");
+        bisect_n_sub_switch(adaptive_summary.worst_switch_klf_low,
+                            adaptive_summary.worst_switch_klf_high,
+                            theta_in, n_steps, rain_mm_per_h, pet_mm_per_h,
+                            &klf_minus, &klf_plus);
+        evaluate_tangent_nsub(klf_minus, theta_in, n_steps, 0, rain_mm_per_h,
+                              pet_mm_per_h, y_minus, dy_minus, n_sub_minus);
+        evaluate_tangent_nsub(klf_plus, theta_in, n_steps, 0, rain_mm_per_h,
+                              pet_mm_per_h, y_plus, dy_plus, n_sub_plus);
+
+        printf("switch between k_lf = %.17e\n", klf_minus);
+        printf("           and k_lf = %.17e   (relative gap %.1e)\n",
+               klf_plus, (klf_plus - klf_minus) / klf_minus);
+        for (int i_step = 0; i_step < n_steps; i_step++) {
+            if (n_sub_minus[i_step] != n_sub_plus[i_step]) {
+                printf("   hour %d: n_sub %d -> %d   (rain %.3f mm/h)\n",
+                       i_step + 1, n_sub_minus[i_step], n_sub_plus[i_step],
+                       rain_mm_per_h[i_step]);
+            }
+        }
+        printf("\n%-22s %15s %15s %15s %15s\n", "output", "jump J",
+               "AD left", "AD right", "J/(AD*k)");
+        for (int k = 0; k < N_OUTPUTS; k++) {
+            double jump = y_plus[k] - y_minus[k];
+            double equivalent_relative_dk = 0.0;
+            char equivalent_text[32];
+
+            strcpy(equivalent_text, "-");
+            if (fabs(dy_minus[k]) > TINY_DERIVATIVE_SCALE) {
+                equivalent_relative_dk = jump / (dy_minus[k] * klf_minus);
+                snprintf(equivalent_text, sizeof(equivalent_text), "%.3e",
+                         equivalent_relative_dk);
+            }
+            printf("%-22s %15.6e %15.8e %15.8e %15s\n", output_label[k],
+                   jump, dy_minus[k], dy_plus[k], equivalent_text);
+        }
+        printf("(J/(AD*k) = the relative change in k_lf that would produce the same\n");
+        printf(" change in that output through the smooth AD derivative)\n");
+
+        printf("\nCentered FD of total lateral flow straddling the switch:\n");
+        printf("%10s %18s %18s\n", "h/k", "FD centered", "AD (left side)");
+        {
+            const double straddle_h[6] = {1.0e-2, 1.0e-4, 1.0e-6, 1.0e-8, 1.0e-10, 1.0e-12};
+            double klf_switch = 0.5 * (klf_minus + klf_plus);
+            static int n_sub_scratch[MAX_STEPS];
+
+            for (int i_h = 0; i_h < 6; i_h++) {
+                double h = klf_switch * straddle_h[i_h];
+                double yp[N_OUTPUTS];
+                double ym[N_OUTPUTS];
+
+                evaluate_primal_nsub(klf_switch + h, theta_in, n_steps, 0,
+                                     rain_mm_per_h, pet_mm_per_h, yp, n_sub_scratch);
+                evaluate_primal_nsub(klf_switch - h, theta_in, n_steps, 0,
+                                     rain_mm_per_h, pet_mm_per_h, ym, n_sub_scratch);
+                printf("%10.0e %18.9e %18.9e\n", straddle_h[i_h],
+                       (total_lateral_from_vector(yp) - total_lateral_from_vector(ym)) / (2.0 * h),
+                       total_lateral_from_vector(dy_minus));
+            }
+        }
+    }
+
+    /* --- E5c fixed n_sub sweep --- */
+    fp = open_csv(output_dir, "e5_sweep_fixed12.csv");
+    sweep_klf(E5_FIXED_N_SUB, theta_in, n_steps, rain_mm_per_h, pet_mm_per_h,
+              fp, &fixed_summary);
+    fclose(fp);
+    print_sweep_summary("E5c FIXED n_sub = 12", &fixed_summary);
+
+    /* --- E5d adaptive versus fixed at the E4 k_lf values --- */
+    printf("\nE5d  ADAPTIVE versus FIXED n_sub = 12 at the E4 k_lf values\n");
+    printf("%-10s %-22s %15s %15s %10s %15s %15s %10s\n", "k_lf", "output",
+           "adaptive", "fixed12", "rel diff", "AD adaptive", "AD fixed12", "rel diff");
+    for (int i_klf = 0; i_klf < 3; i_klf++) {
+        double klf = compare_klf[i_klf];
+        const int show_index[5] = {IDX_LATERAL_0, IDX_LATERAL_0 + NDISC - 1,
+                                   IDX_THETA_0, IDX_THETA_0 + NDISC - 1, IDX_PERC};
+
+        evaluate_tangent_nsub(klf, theta_in, n_steps, 0, rain_mm_per_h,
+                              pet_mm_per_h, y_minus, dy_minus, n_sub_minus);
+        evaluate_tangent_nsub(klf, theta_in, n_steps, E5_FIXED_N_SUB, rain_mm_per_h,
+                              pet_mm_per_h, y_plus, dy_plus, n_sub_plus);
+        for (int j = 0; j < 5; j++) {
+            int k = show_index[j];
+            printf("%-10.1e %-22s %15.8e %15.8e %10.2e %15.8e %15.8e %10.2e\n",
+                   klf, output_label[k], y_minus[k], y_plus[k],
+                   relative_difference_from_ad(y_plus[k], y_minus[k]),
+                   dy_minus[k], dy_plus[k],
+                   relative_difference_from_ad(dy_plus[k], dy_minus[k]));
+        }
+        {
+            double lat_adaptive = total_lateral_from_vector(y_minus);
+            double lat_fixed = total_lateral_from_vector(y_plus);
+            double dlat_adaptive = total_lateral_from_vector(dy_minus);
+            double dlat_fixed = total_lateral_from_vector(dy_plus);
+            printf("%-10.1e %-22s %15.8e %15.8e %10.2e %15.8e %15.8e %10.2e\n",
+                   klf, "lateral_total_m", lat_adaptive, lat_fixed,
+                   relative_difference_from_ad(lat_fixed, lat_adaptive),
+                   dlat_adaptive, dlat_fixed,
+                   relative_difference_from_ad(dlat_fixed, dlat_adaptive));
+            printf("%-10.1e derivative volume residual: adaptive %.2e   fixed12 %.2e\n",
+                   klf, derivative_volume_residual(dy_minus),
+                   derivative_volume_residual(dy_plus));
+        }
+    }
+}
+
+
+/* ------------------------------------------------------------------ */
 
 int main(int argc, char **argv)
 {
     const char *output_dir = ".";
     const char *forcing_path = "forcing/rain_pet_example.csv";
 
+    const char *experiments = "12345";
+
     if (argc > 1) output_dir = argv[1];
     if (argc > 2) forcing_path = argv[2];
+    if (argc > 3) experiments = argv[3];
 
-    experiment_1_single_step(output_dir);
-    experiment_2_storage_cap_kink(output_dir);
-    experiment_3_drydown(output_dir);
-    experiment_4_observed_forcing(output_dir, forcing_path);
+    if (strchr(experiments, '1') != NULL) experiment_1_single_step(output_dir);
+    if (strchr(experiments, '2') != NULL) experiment_2_storage_cap_kink(output_dir);
+    if (strchr(experiments, '3') != NULL) experiment_3_drydown(output_dir);
+    if (strchr(experiments, '4') != NULL) experiment_4_observed_forcing(output_dir, forcing_path);
+    if (strchr(experiments, '5') != NULL) experiment_5_n_sub_boundaries(output_dir, forcing_path);
 
     return 0;
 }

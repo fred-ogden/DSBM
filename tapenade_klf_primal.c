@@ -34,7 +34,7 @@
  * Soil parameters are the configs/soil_params.dat values, except that
  * k_lf is the argument.  Analytic Clapp-Hornberger, no lookup table,
  * no field-capacity threshold on percolation.  Adaptive n_sub is left
- * as in production.
+ * as in production unless n_sub_fixed > 0.
  *
  * Units:
  *   klf_m_per_h               m/h  (lateral rate constant, as in the kernel)
@@ -112,6 +112,8 @@ double klf_experiment_theta_fc(void)
  *   klf_m_per_h            ACTIVE: lateral subsurface flow rate constant (m/h)
  *   theta_in[NDISC]        passive: entering soil moisture (m3/m3)
  *   n_steps                passive: number of hourly timesteps
+ *   n_sub_fixed            passive: 0 = production adaptive substeps,
+ *                          >0 = fixed substep count every timestep
  *   rain_mm_per_h[n_steps] passive: rainfall forcing (mm/h)
  *   pet_mm_per_h[n_steps]  passive: PET forcing (mm/h)
  *
@@ -137,6 +139,7 @@ double klf_experiment_theta_fc(void)
 void dsbm_lateral_from_klf(double klf_m_per_h,
                            const double *theta_in,
                            int n_steps,
+                           int n_sub_fixed,
                            const double *rain_mm_per_h,
                            const double *pet_mm_per_h,
                            double *lateral_total_by_disc_m,
@@ -167,6 +170,7 @@ void dsbm_lateral_from_klf(double klf_m_per_h,
     ctrl.use_ch_lookup_table = 0;
     ctrl.apply_fc_perc_threshold = 0;
     ctrl.dt_hours = 1.0;
+    ctrl.n_sub_fixed = n_sub_fixed;
 
     /* ---- Noah-MP disc geometry (m) ---- */
     geom.dz[0] = 0.10;

@@ -180,8 +180,16 @@ int soil_step_one_hour_stateless(
                              sin->psi_in[i+1], sin->K_in[i+1],
                              geom->dz[i], geom->dz[i+1]);
     }
-    int n_sub = choose_n_sub_generic(dtH, forcing->rain_mm_per_h,
+    // Adaptive substep count by default.  A positive ctrl->n_sub_fixed
+    // overrides it (used to test how adaptive time discretization
+    // affects derivatives with respect to calibration parameters).
+    int n_sub;
+    if (ctrl->n_sub_fixed > 0) {
+        n_sub = ctrl->n_sub_fixed;
+    } else {
+        n_sub = choose_n_sub_generic(dtH, forcing->rain_mm_per_h,
                                      geom->dz, theta, par->theta_sat, q0, ndisc);
+    }
     if (n_sub < 1) n_sub = 1;
     flux->n_sub_used = n_sub;
 

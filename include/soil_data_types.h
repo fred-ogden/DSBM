@@ -34,6 +34,7 @@ typedef struct {
     int    deepest_root_disc;     // 1..ndisc
     int    use_ch_lookup_table;   // 1 => use LUT; 0 => analytic CH
     int    apply_fc_perc_threshold; // 1 => bottom drainage only above theta_fc
+    int    n_sub_fixed;           // 0 => adaptive n_sub (default); >0 => fixed substep count
     double dt_hours;              // usually 1.0
 } SoilControl;
 

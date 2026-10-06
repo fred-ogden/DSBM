@@ -19,7 +19,7 @@
  *
  *   void dsbm_lateral_from_klf_d(
  *       double klf_m_per_h, double klf_m_per_hd,
- *       const double *theta_in, int n_steps,
+ *       const double *theta_in, int n_steps, int n_sub_fixed,
  *       const double *rain_mm_per_h, const double *pet_mm_per_h,
  *       double *lateral_total_by_disc_m, double *lateral_total_by_disc_md,
  *       double *theta_out, double *theta_outd,
@@ -40,6 +40,7 @@
 void klf_tangent_from_tapenade(double klf_m_per_h,
                                const double *theta_in,
                                int n_steps,
+                               int n_sub_fixed,
                                const double *rain_mm_per_h,
                                const double *pet_mm_per_h,
                                double *lateral_total_by_disc_m,
@@ -58,7 +59,7 @@ void klf_tangent_from_tapenade(double klf_m_per_h,
     const double klf_seed = 1.0;
 
     dsbm_lateral_from_klf_d(klf_m_per_h, klf_seed,
-                            theta_in, n_steps,
+                            theta_in, n_steps, n_sub_fixed,
                             rain_mm_per_h, pet_mm_per_h,
                             lateral_total_by_disc_m, d_lateral_total_by_disc_m_d_klf,
                             theta_out, d_theta_out_d_klf,

@@ -89,6 +89,7 @@ void dsbm_percolation_from_ksat(double K_sat_cm_per_h,
     ctrl.deepest_root_disc = NDISC;
     ctrl.use_ch_lookup_table = 0;
     ctrl.apply_fc_perc_threshold = 0;
+    ctrl.n_sub_fixed = 0;
     ctrl.dt_hours = 1.0;
 
     geom.dz[0] = 0.10;

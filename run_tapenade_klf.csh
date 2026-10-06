@@ -4,10 +4,11 @@
 #
 # One-command build and run of the k_lf Tapenade tangent experiments
 # (E1 single timestep, E2 storage-cap kink, E3 drydown with theta_fc
-# crossings, E4 observed forcing).
+# crossings, E4 observed forcing, E5 adaptive n_sub boundaries).
 #
 # Usage, from the repository root:
-#     ./run_tapenade_klf.csh
+#     ./run_tapenade_klf.csh            (all experiments, E1-E5)
+#     ./run_tapenade_klf.csh 5          (E5 only; any digit string works)
 #
 # Steps:
 #   1. build the production library (make)
@@ -24,6 +25,8 @@
 # by git.  ASCII only.
 
 set nonomatch
+set experiments = 12345
+if ( $#argv > 0 ) set experiments = "$1"
 set ndisc = 4
 set theta_min = 1.0e-03
 set work_dir = tapenade_input/klf
@@ -157,7 +160,7 @@ echo ""
 echo "==== 6. running experiments"
 rm -rf $results_dir
 mkdir -p $results_dir
-./$exe $results_dir forcing/rain_pet_example.csv | tee $results_dir/results.txt
+./$exe $results_dir forcing/rain_pet_example.csv $experiments | tee $results_dir/results.txt
 set run_status = $status
 
 echo ""
