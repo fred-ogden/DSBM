@@ -83,7 +83,8 @@ double remove_lateral_to_subsurface_nash_substep(double theta[NDISC], const doub
 
 /* Lateral removal integrated exactly over the substep (m removed this substep).
    Solves d(theta)/dt = -k_lf (theta - theta_fc) / (dz (theta_sat - theta_fc))
-   for theta > theta_fc; never drains a disc below theta_fc. */
+   for theta > theta_fc.  Lateral removal by itself never takes a disc below
+   theta_fc; other processes can. */
 double remove_lateral_to_subsurface_nash_substep_exponential(
                                                  double theta[NDISC], const double dz[NDISC],
                                                  double theta_fc, double theta_sat,

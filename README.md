@@ -387,11 +387,17 @@ By default this equation is integrated exactly over each substep:
 theta_i - theta_fc  <-  (theta_i - theta_fc) * exp(-klf * dt_sub / (dz_i * (theta_sat - theta_fc)))
 ```
 
-The exact solution never drains a disc below theta_fc, needs no storage
-cap, and its derivative with respect to klf is never artificially zero,
-which matters for gradient-based calibration.  The legacy forward-Euler
-step, capped at the soil moisture available above theta_fc, can be
-selected with:
+Lateral removal by itself can never take a disc below theta_fc, so the
+exact solution needs no storage cap, and its derivative with respect to
+klf is never artificially zero, which matters for gradient-based
+calibration.  Other processes (Darcy-Buckingham drainage, root water
+uptake, bare-soil evaporation from disc 1, and percolation from disc 4)
+can and do take discs below theta_fc; lateral flow from such a disc is
+then zero.  The volume removed by the lateral step equals the change in
+storage it causes.
+
+The legacy forward-Euler step, capped at the soil moisture available
+above theta_fc, can be selected with:
 
 ``` text
 --lateral-forward-euler

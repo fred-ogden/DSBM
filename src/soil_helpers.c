@@ -347,9 +347,12 @@ double remove_lateral_to_subsurface_nash_substep(double theta[NDISC], const doub
 //     theta(t+dt) - theta_fc = (theta(t) - theta_fc) * exp(-a),
 //     a = k_lf * dt_sub / (dz * (theta_sat - theta_fc)).
 //
-// Same physics, same theta_fc threshold, but the result no longer depends
-// on the substep count, needs no cap (theta can never fall below
-// theta_fc), and the removed volume equals the storage change exactly.
+// Same physics and same theta_fc threshold.  For a given substep this
+// removal is exact rather than a first-order approximation, it needs no
+// cap because lateral removal by itself cannot take theta below
+// theta_fc, and the removed volume equals the storage change exactly.
+// Other processes in the substep (drainage, root uptake, bare-soil
+// evaporation, percolation) can still take a disc below theta_fc.
 double remove_lateral_to_subsurface_nash_substep_exponential(
                                                  double theta[NDISC], const double dz[NDISC],
                                                  double theta_fc, double theta_sat,
