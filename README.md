@@ -370,6 +370,40 @@ These are properties or parameters of the **uniform soil column**. The
 current DSBM formulation does not assign an independent set of hydraulic
 properties to each disc.
 
+## Lateral subsurface flow
+
+Each disc above field capacity loses soil moisture to the lateral
+(Nash cascade) reservoir as a linear reservoir:
+
+``` text
+d(theta_i)/dt = -klf * (theta_i - theta_fc) / (dz_i * (theta_sat - theta_fc))
+```
+
+with no lateral flow from a disc at or below theta_fc.
+
+By default this equation is integrated exactly over each substep:
+
+``` text
+theta_i - theta_fc  <-  (theta_i - theta_fc) * exp(-klf * dt_sub / (dz_i * (theta_sat - theta_fc)))
+```
+
+The exact solution never drains a disc below theta_fc, needs no storage
+cap, and its derivative with respect to klf is never artificially zero,
+which matters for gradient-based calibration.  The legacy forward-Euler
+step, capped at the soil moisture available above theta_fc, can be
+selected with:
+
+``` text
+--lateral-forward-euler
+```
+
+For time-discretization experiments the adaptive DSBM substep count can
+be replaced by a fixed count:
+
+``` text
+--n-sub-fixed 12
+```
+
 ## Numerical comparison objective
 
 The DSBM--Noah-MP experiment is designed primarily to answer:

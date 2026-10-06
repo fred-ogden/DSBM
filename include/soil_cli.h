@@ -50,7 +50,8 @@ typedef struct {
     char solver[16];          /* dsbm or noahmp */
     int  apply_fc_perc_threshold; /* apply theta_fc threshold to bottom drainage */
     int  n_sub_fixed;             /* DSBM: 0 = adaptive substeps, >0 = fixed count */
-    int  lateral_analytic;        /* DSBM: 1 = exact exponential lateral removal */
+    int  lateral_scheme;          /* DSBM: LATERAL_SCHEME_EXPONENTIAL (default) or
+                                     LATERAL_SCHEME_FORWARD_EULER */
 
     /* initialisation */
     int  use_init_wt_depth;

@@ -174,7 +174,12 @@ void dsbm_lateral_from_klf(double klf_m_per_h,
     ctrl.apply_fc_perc_threshold = 0;
     ctrl.dt_hours = 1.0;
     ctrl.n_sub_fixed = n_sub_fixed;
-    ctrl.lateral_analytic = lateral_analytic;
+    /* wrapper argument keeps its original meaning: 1 = exponential */
+    if (lateral_analytic) {
+        ctrl.lateral_scheme = LATERAL_SCHEME_EXPONENTIAL;
+    } else {
+        ctrl.lateral_scheme = LATERAL_SCHEME_FORWARD_EULER;
+    }
 
     /* ---- Noah-MP disc geometry (m) ---- */
     geom.dz[0] = 0.10;

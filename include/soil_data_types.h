@@ -29,14 +29,20 @@
 extern "C" {
 #endif
 
+// Lateral subsurface flow integration within each DSBM substep.
+// The exponential value is 0 so that a zero-initialized SoilControl
+// selects it.
+#define LATERAL_SCHEME_EXPONENTIAL    0   // exact linear-reservoir solution
+#define LATERAL_SCHEME_FORWARD_EULER  1   // legacy explicit step with storage cap
+
 typedef struct {
     int    ndisc;                 // must equal NDISC
     int    deepest_root_disc;     // 1..ndisc
     int    use_ch_lookup_table;   // 1 => use LUT; 0 => analytic CH
     int    apply_fc_perc_threshold; // 1 => bottom drainage only above theta_fc
     int    n_sub_fixed;           // 0 => adaptive n_sub (default); >0 => fixed substep count
-    int    lateral_analytic;      // 0 => forward-Euler lateral removal (default);
-                                  // 1 => exact exponential solution within each substep
+    int    lateral_scheme;        // LATERAL_SCHEME_EXPONENTIAL (0, default) or
+                                  // LATERAL_SCHEME_FORWARD_EULER (1)
     double dt_hours;              // usually 1.0
 } SoilControl;
 

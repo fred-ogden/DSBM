@@ -49,7 +49,7 @@
  *       c) the same sweep with fixed n_sub = 12;
  *       d) adaptive versus fixed n_sub = 12 values and derivatives.
  *
- *   E6  Exact exponential lateral removal (ctrl.lateral_analytic = 1)
+ *   E6  Exact exponential lateral removal (wrapper lateral_analytic = 1)
  *       versus forward Euler: one-timestep check against the analytic
  *       derivative (including k_lf above the Euler storage cap), the E5
  *       sweeps repeated with the exponential scheme, and how much values
