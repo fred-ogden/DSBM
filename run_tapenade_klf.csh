@@ -46,7 +46,10 @@ if ( -d $tapenade_home/ADFirstAidKit ) then
     set tapenade_kit_flags = "-I$tapenade_home/ADFirstAidKit"
 endif
 
-echo "==== 1. building production library"
+echo "==== 1. building production library (clean rebuild)"
+# Always rebuild from scratch: a stale libsoil.a compiled against an older
+# SoilControl layout silently corrupts every primal (finite-difference) run.
+make -s veryclean
 make -s
 if ( $status != 0 ) then
     echo "ERROR: make failed"

@@ -1370,6 +1370,54 @@ static void experiment_5_n_sub_boundaries(const char *output_dir,
 }
 
 
+/*
+ * Consistency check run before any experiment: the primal wrapper (linked
+ * against libsoil.a) and the Tapenade tangent (which carries its own copy
+ * of the kernel) must produce the same primal values.  A mismatch means
+ * the library and the generated code were built from different sources
+ * or struct layouts, and every finite-difference result would be wrong.
+ */
+static int primal_and_tangent_values_agree(void)
+{
+    const double klf_check_m_per_h = 1.0e-3;
+    double theta_in[NDISC];
+    double rain_mm_per_h[1];
+    double pet_mm_per_h[1];
+    double y_primal[N_OUTPUTS];
+    double y_tangent[N_OUTPUTS];
+    double dy_tangent[N_OUTPUTS];
+    int n_sub_primal[1];
+    int n_sub_tangent[1];
+    int all_agree;
+
+    baseline_entering_state(theta_in);
+    rain_mm_per_h[0] = 2.0;
+    pet_mm_per_h[0] = 0.3;
+
+    evaluate_primal(klf_check_m_per_h, theta_in, 1, rain_mm_per_h, pet_mm_per_h,
+                    y_primal, n_sub_primal);
+    evaluate_tangent(klf_check_m_per_h, theta_in, 1, rain_mm_per_h, pet_mm_per_h,
+                     y_tangent, dy_tangent, n_sub_tangent);
+
+    all_agree = 1;
+    if (n_sub_primal[0] != n_sub_tangent[0]) all_agree = 0;
+    for (int k = 0; k < N_OUTPUTS; k++) {
+        double scale = fabs(y_tangent[k]);
+
+        if (scale < 1.0e-12) scale = 1.0e-12;
+        if (fabs(y_primal[k] - y_tangent[k]) > 1.0e-12 * scale) {
+            printf("CONSISTENCY FAILURE %-22s primal %.17e  tangent %.17e\n",
+                   output_label[k], y_primal[k], y_tangent[k]);
+            all_agree = 0;
+        }
+    }
+    if (!all_agree) {
+        printf("ERROR: primal (libsoil.a) and Tapenade tangent disagree on primal values.\n");
+        printf("       libsoil.a is probably stale.  Rebuild with: make veryclean ; make\n");
+    }
+    return all_agree;
+}
+
 /* ------------------------------------------------------------------ */
 
 int main(int argc, char **argv)
@@ -1382,6 +1430,9 @@ int main(int argc, char **argv)
     if (argc > 1) output_dir = argv[1];
     if (argc > 2) forcing_path = argv[2];
     if (argc > 3) experiments = argv[3];
+
+    if (!primal_and_tangent_values_agree()) return 2;
+    printf("Consistency check passed: primal and tangent primal values agree.\n");
 
     if (strchr(experiments, '1') != NULL) experiment_1_single_step(output_dir);
     if (strchr(experiments, '2') != NULL) experiment_2_storage_cap_kink(output_dir);
