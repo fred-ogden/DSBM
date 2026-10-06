@@ -25,3 +25,13 @@ soil_driver
 
 soil_bmi_naming_proposal.docx
 noah-mp_soilwater_code/
+
+# Tapenade generated files and test artifacts
+*_d.c
+*_d.h
+*_d.msg
+tapenade_defs.h
+tapenade_input/
+tapenade_dsbm_derivative_test
+tapenade_dsbm_test
+tapenade_test.c
