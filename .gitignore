@@ -35,3 +35,4 @@ tapenade_input/
 tapenade_dsbm_derivative_test
 tapenade_dsbm_test
 tapenade_test.c
+tapenade_klf_derivative_test
