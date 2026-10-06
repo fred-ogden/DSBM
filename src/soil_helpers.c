@@ -333,6 +333,54 @@ double remove_lateral_to_subsurface_nash_substep(double theta[NDISC], const doub
     return total_removed_m;
 }
 
+/************/ // Lateral removal substep, exact exponential integration (m removed this substep)
+//
+// The forward-Euler version above removes k_lf * frac * dt_sub, with
+// frac = (theta - theta_fc)/(theta_sat - theta_fc), and caps the removal at
+// the water above theta_fc.  That is one explicit step of the linear
+// reservoir
+//
+//     d(theta)/dt = -k_lf * (theta - theta_fc) / (dz * (theta_sat - theta_fc))
+//
+// whose exact solution over a substep is
+//
+//     theta(t+dt) - theta_fc = (theta(t) - theta_fc) * exp(-a),
+//     a = k_lf * dt_sub / (dz * (theta_sat - theta_fc)).
+//
+// Same physics, same theta_fc threshold, but the result no longer depends
+// on the substep count, needs no cap (theta can never fall below
+// theta_fc), and the removed volume equals the storage change exactly.
+double remove_lateral_to_subsurface_nash_substep_exponential(
+                                                 double theta[NDISC], const double dz[NDISC],
+                                                 double theta_fc, double theta_sat,
+                                                 double rate_const_m_per_h, double dt_sub,
+                                                 double removed_by_disc_accum_m[NDISC])
+{
+    double total_removed_m = 0.0;
+
+    for (int i = 0; i < NDISC; i++) {
+        if (theta[i] <= theta_fc) continue;
+
+        double denom = theta_sat - theta_fc;
+        if (denom < 1.0e-12) denom = 1.0e-12;
+
+        double excess_theta = theta[i] - theta_fc;                    // m3/m3
+        double decay_exponent = rate_const_m_per_h * dt_sub / (dz[i] * denom);
+        double removed_theta = excess_theta * (1.0 - exp(-decay_exponent));
+        double take_m = removed_theta * dz[i];
+
+        if (take_m > 0.0) {
+            theta[i] -= removed_theta;
+            if (theta[i] < theta_fc) theta[i] = theta_fc;
+
+            total_removed_m += take_m;
+            if (removed_by_disc_accum_m) removed_by_disc_accum_m[i] += take_m;
+        }
+    }
+
+    return total_removed_m;
+}
+
 /************/ // Hydrostatic storage integral (helper)
 static double storage_given_zwt(double z_wt,
                                 double soil_depth_m,

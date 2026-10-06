@@ -114,6 +114,8 @@ double klf_experiment_theta_fc(void)
  *   n_steps                passive: number of hourly timesteps
  *   n_sub_fixed            passive: 0 = production adaptive substeps,
  *                          >0 = fixed substep count every timestep
+ *   lateral_analytic       passive: 0 = forward-Euler lateral removal,
+ *                          1 = exact exponential integration per substep
  *   rain_mm_per_h[n_steps] passive: rainfall forcing (mm/h)
  *   pet_mm_per_h[n_steps]  passive: PET forcing (mm/h)
  *
@@ -140,6 +142,7 @@ void dsbm_lateral_from_klf(double klf_m_per_h,
                            const double *theta_in,
                            int n_steps,
                            int n_sub_fixed,
+                           int lateral_analytic,
                            const double *rain_mm_per_h,
                            const double *pet_mm_per_h,
                            double *lateral_total_by_disc_m,
@@ -171,6 +174,7 @@ void dsbm_lateral_from_klf(double klf_m_per_h,
     ctrl.apply_fc_perc_threshold = 0;
     ctrl.dt_hours = 1.0;
     ctrl.n_sub_fixed = n_sub_fixed;
+    ctrl.lateral_analytic = lateral_analytic;
 
     /* ---- Noah-MP disc geometry (m) ---- */
     geom.dz[0] = 0.10;

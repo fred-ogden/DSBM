@@ -35,6 +35,8 @@ typedef struct {
     int    use_ch_lookup_table;   // 1 => use LUT; 0 => analytic CH
     int    apply_fc_perc_threshold; // 1 => bottom drainage only above theta_fc
     int    n_sub_fixed;           // 0 => adaptive n_sub (default); >0 => fixed substep count
+    int    lateral_analytic;      // 0 => forward-Euler lateral removal (default);
+                                  // 1 => exact exponential solution within each substep
     double dt_hours;              // usually 1.0
 } SoilControl;
 

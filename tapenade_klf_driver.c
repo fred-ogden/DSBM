@@ -49,10 +49,17 @@
  *       c) the same sweep with fixed n_sub = 12;
  *       d) adaptive versus fixed n_sub = 12 values and derivatives.
  *
+ *   E6  Exact exponential lateral removal (ctrl.lateral_analytic = 1)
+ *       versus forward Euler: one-timestep check against the analytic
+ *       derivative (including k_lf above the Euler storage cap), the E5
+ *       sweeps repeated with the exponential scheme, and how much values
+ *       and derivatives depend on adaptive versus fixed n_sub = 12 under
+ *       each scheme.
+ *
  * Usage:
  *   tapenade_klf_derivative_test  output_directory  forcing_csv_file  [experiments]
  *
- *   experiments is a string of digits, default "12345"; e.g. "5" runs E5 only.
+ *   experiments is a string of digits, default "123456"; e.g. "6" runs E6 only.
  *
  * Terminology: soil moisture; discs; cost function.
  * ASCII only.
@@ -78,6 +85,7 @@ void dsbm_lateral_from_klf(double klf_m_per_h,
                            const double *theta_in,
                            int n_steps,
                            int n_sub_fixed,
+                           int lateral_analytic,
                            const double *rain_mm_per_h,
                            const double *pet_mm_per_h,
                            double *lateral_total_by_disc_m,
@@ -91,6 +99,7 @@ void klf_tangent_from_tapenade(double klf_m_per_h,
                                const double *theta_in,
                                int n_steps,
                                int n_sub_fixed,
+                               int lateral_analytic,
                                const double *rain_mm_per_h,
                                const double *pet_mm_per_h,
                                double *lateral_total_by_disc_m,
@@ -155,6 +164,7 @@ static void evaluate_primal_nsub(double klf_m_per_h,
                             const double *theta_in,
                             int n_steps,
                             int n_sub_fixed,
+                            int lateral_analytic,
                             const double *rain_mm_per_h,
                             const double *pet_mm_per_h,
                             double *output_vector,
@@ -167,7 +177,7 @@ static void evaluate_primal_nsub(double klf_m_per_h,
     double excess_m;
     int i_disc;
 
-    dsbm_lateral_from_klf(klf_m_per_h, theta_in, n_steps, n_sub_fixed,
+    dsbm_lateral_from_klf(klf_m_per_h, theta_in, n_steps, n_sub_fixed, lateral_analytic,
                           rain_mm_per_h, pet_mm_per_h,
                           lateral_m, theta_out, &perc_m, &aet_m, &excess_m,
                           n_sub_used_by_step);
@@ -186,6 +196,7 @@ static void evaluate_tangent_nsub(double klf_m_per_h,
                              const double *theta_in,
                              int n_steps,
                              int n_sub_fixed,
+                             int lateral_analytic,
                              const double *rain_mm_per_h,
                              const double *pet_mm_per_h,
                              double *output_vector,
@@ -204,7 +215,7 @@ static void evaluate_tangent_nsub(double klf_m_per_h,
     double d_excess_m;
     int i_disc;
 
-    klf_tangent_from_tapenade(klf_m_per_h, theta_in, n_steps, n_sub_fixed,
+    klf_tangent_from_tapenade(klf_m_per_h, theta_in, n_steps, n_sub_fixed, lateral_analytic,
                               rain_mm_per_h, pet_mm_per_h,
                               lateral_m, d_lateral_m,
                               theta_out, d_theta_out,
@@ -236,7 +247,7 @@ static void evaluate_primal(double klf_m_per_h,
                             double *output_vector,
                             int *n_sub_used_by_step)
 {
-    evaluate_primal_nsub(klf_m_per_h, theta_in, n_steps, 0,
+    evaluate_primal_nsub(klf_m_per_h, theta_in, n_steps, 0, 0,
                          rain_mm_per_h, pet_mm_per_h,
                          output_vector, n_sub_used_by_step);
 }
@@ -250,7 +261,7 @@ static void evaluate_tangent(double klf_m_per_h,
                              double *d_output_d_klf,
                              int *n_sub_used_by_step)
 {
-    evaluate_tangent_nsub(klf_m_per_h, theta_in, n_steps, 0,
+    evaluate_tangent_nsub(klf_m_per_h, theta_in, n_steps, 0, 0,
                           rain_mm_per_h, pet_mm_per_h,
                           output_vector, d_output_d_klf, n_sub_used_by_step);
 }
@@ -1022,6 +1033,7 @@ typedef struct {
 } SweepSummary;
 
 static void sweep_klf(int n_sub_fixed,
+                      int lateral_analytic,
                       const double *theta_in,
                       int n_steps,
                       const double *rain_mm_per_h,
@@ -1076,7 +1088,7 @@ static void sweep_klf(int n_sub_fixed,
         int n_steps_changed;
         int i_step;
 
-        evaluate_tangent_nsub(klf, theta_in, n_steps, n_sub_fixed,
+        evaluate_tangent_nsub(klf, theta_in, n_steps, n_sub_fixed, lateral_analytic,
                               rain_mm_per_h, pet_mm_per_h,
                               y_current, dy_current, n_sub_current);
         key_outputs(y_current, key_current);
@@ -1191,6 +1203,7 @@ static void print_sweep_summary(const char *label, const SweepSummary *s)
  * adjacent k_lf values bracketing the switch.
  */
 static void bisect_n_sub_switch(double klf_low, double klf_high,
+                                int lateral_analytic,
                                 const double *theta_in, int n_steps,
                                 const double *rain_mm_per_h,
                                 const double *pet_mm_per_h,
@@ -1201,14 +1214,14 @@ static void bisect_n_sub_switch(double klf_low, double klf_high,
     double y_scratch[N_OUTPUTS];
     int iteration;
 
-    evaluate_primal_nsub(klf_low, theta_in, n_steps, 0, rain_mm_per_h,
+    evaluate_primal_nsub(klf_low, theta_in, n_steps, 0, lateral_analytic, rain_mm_per_h,
                          pet_mm_per_h, y_scratch, n_sub_low);
 
     for (iteration = 0; iteration < 200; iteration++) {
         double klf_mid = 0.5 * (klf_low + klf_high);
 
         if (klf_mid <= klf_low || klf_mid >= klf_high) break;
-        evaluate_primal_nsub(klf_mid, theta_in, n_steps, 0, rain_mm_per_h,
+        evaluate_primal_nsub(klf_mid, theta_in, n_steps, 0, lateral_analytic, rain_mm_per_h,
                              pet_mm_per_h, y_scratch, n_sub_mid);
         if (count_n_sub_differences(n_sub_low, n_sub_mid, n_steps) == 0) {
             klf_low = klf_mid;
@@ -1256,7 +1269,7 @@ static void experiment_5_n_sub_boundaries(const char *output_dir,
 
     /* --- E5a adaptive sweep --- */
     fp = open_csv(output_dir, "e5_sweep_adaptive.csv");
-    sweep_klf(0, theta_in, n_steps, rain_mm_per_h, pet_mm_per_h, fp, &adaptive_summary);
+    sweep_klf(0, 0, theta_in, n_steps, rain_mm_per_h, pet_mm_per_h, fp, &adaptive_summary);
     fclose(fp);
     print_sweep_summary("E5a ADAPTIVE n_sub", &adaptive_summary);
 
@@ -1265,11 +1278,12 @@ static void experiment_5_n_sub_boundaries(const char *output_dir,
         printf("\nE5b  WORST n_sub SWITCH, located by bisection\n");
         bisect_n_sub_switch(adaptive_summary.worst_switch_klf_low,
                             adaptive_summary.worst_switch_klf_high,
+                            0,
                             theta_in, n_steps, rain_mm_per_h, pet_mm_per_h,
                             &klf_minus, &klf_plus);
-        evaluate_tangent_nsub(klf_minus, theta_in, n_steps, 0, rain_mm_per_h,
+        evaluate_tangent_nsub(klf_minus, theta_in, n_steps, 0, 0, rain_mm_per_h,
                               pet_mm_per_h, y_minus, dy_minus, n_sub_minus);
-        evaluate_tangent_nsub(klf_plus, theta_in, n_steps, 0, rain_mm_per_h,
+        evaluate_tangent_nsub(klf_plus, theta_in, n_steps, 0, 0, rain_mm_per_h,
                               pet_mm_per_h, y_plus, dy_plus, n_sub_plus);
 
         printf("switch between k_lf = %.17e\n", klf_minus);
@@ -1313,9 +1327,9 @@ static void experiment_5_n_sub_boundaries(const char *output_dir,
                 double yp[N_OUTPUTS];
                 double ym[N_OUTPUTS];
 
-                evaluate_primal_nsub(klf_switch + h, theta_in, n_steps, 0,
+                evaluate_primal_nsub(klf_switch + h, theta_in, n_steps, 0, 0,
                                      rain_mm_per_h, pet_mm_per_h, yp, n_sub_scratch);
-                evaluate_primal_nsub(klf_switch - h, theta_in, n_steps, 0,
+                evaluate_primal_nsub(klf_switch - h, theta_in, n_steps, 0, 0,
                                      rain_mm_per_h, pet_mm_per_h, ym, n_sub_scratch);
                 printf("%10.0e %18.9e %18.9e\n", straddle_h[i_h],
                        (total_lateral_from_vector(yp) - total_lateral_from_vector(ym)) / (2.0 * h),
@@ -1326,7 +1340,7 @@ static void experiment_5_n_sub_boundaries(const char *output_dir,
 
     /* --- E5c fixed n_sub sweep --- */
     fp = open_csv(output_dir, "e5_sweep_fixed12.csv");
-    sweep_klf(E5_FIXED_N_SUB, theta_in, n_steps, rain_mm_per_h, pet_mm_per_h,
+    sweep_klf(E5_FIXED_N_SUB, 0, theta_in, n_steps, rain_mm_per_h, pet_mm_per_h,
               fp, &fixed_summary);
     fclose(fp);
     print_sweep_summary("E5c FIXED n_sub = 12", &fixed_summary);
@@ -1340,9 +1354,9 @@ static void experiment_5_n_sub_boundaries(const char *output_dir,
         const int show_index[5] = {IDX_LATERAL_0, IDX_LATERAL_0 + NDISC - 1,
                                    IDX_THETA_0, IDX_THETA_0 + NDISC - 1, IDX_PERC};
 
-        evaluate_tangent_nsub(klf, theta_in, n_steps, 0, rain_mm_per_h,
+        evaluate_tangent_nsub(klf, theta_in, n_steps, 0, 0, rain_mm_per_h,
                               pet_mm_per_h, y_minus, dy_minus, n_sub_minus);
-        evaluate_tangent_nsub(klf, theta_in, n_steps, E5_FIXED_N_SUB, rain_mm_per_h,
+        evaluate_tangent_nsub(klf, theta_in, n_steps, E5_FIXED_N_SUB, 0, rain_mm_per_h,
                               pet_mm_per_h, y_plus, dy_plus, n_sub_plus);
         for (int j = 0; j < 5; j++) {
             int k = show_index[j];
@@ -1365,6 +1379,210 @@ static void experiment_5_n_sub_boundaries(const char *output_dir,
             printf("%-10.1e derivative volume residual: adaptive %.2e   fixed12 %.2e\n",
                    klf, derivative_volume_residual(dy_minus),
                    derivative_volume_residual(dy_plus));
+        }
+    }
+}
+
+
+/* ------------------------------------------------------------------ */
+/* E6: exact exponential lateral removal versus forward Euler          */
+/* ------------------------------------------------------------------ */
+
+/* jump across a located n_sub switch, as equivalent dk/k, for key outputs */
+static void print_switch_jumps(const char *label, int lateral_analytic,
+                               const SweepSummary *summary,
+                               const double *theta_in, int n_steps,
+                               const double *rain_mm_per_h,
+                               const double *pet_mm_per_h)
+{
+    static int n_sub_minus[MAX_STEPS];
+    static int n_sub_plus[MAX_STEPS];
+    double y_minus[N_OUTPUTS];
+    double dy_minus[N_OUTPUTS];
+    double y_plus[N_OUTPUTS];
+    double dy_plus[N_OUTPUTS];
+    double klf_minus;
+    double klf_plus;
+    const int show_index[5] = {IDX_LATERAL_0, IDX_THETA_0, IDX_THETA_0 + 1,
+                               IDX_THETA_0 + NDISC - 1, IDX_PERC};
+
+    if (summary->n_intervals_with_n_sub_change == 0) {
+        printf("%s: no n_sub switch in the sweep\n", label);
+        return;
+    }
+    bisect_n_sub_switch(summary->worst_switch_klf_low, summary->worst_switch_klf_high,
+                        lateral_analytic, theta_in, n_steps,
+                        rain_mm_per_h, pet_mm_per_h, &klf_minus, &klf_plus);
+    evaluate_tangent_nsub(klf_minus, theta_in, n_steps, 0, lateral_analytic,
+                          rain_mm_per_h, pet_mm_per_h, y_minus, dy_minus, n_sub_minus);
+    evaluate_tangent_nsub(klf_plus, theta_in, n_steps, 0, lateral_analytic,
+                          rain_mm_per_h, pet_mm_per_h, y_plus, dy_plus, n_sub_plus);
+
+    printf("%s: worst switch at k_lf = %.10e m/h\n", label, klf_minus);
+    for (int i_step = 0; i_step < n_steps; i_step++) {
+        if (n_sub_minus[i_step] != n_sub_plus[i_step]) {
+            printf("   hour %d: n_sub %d -> %d   (rain %.3f mm/h)\n",
+                   i_step + 1, n_sub_minus[i_step], n_sub_plus[i_step],
+                   rain_mm_per_h[i_step]);
+        }
+    }
+    printf("   %-22s %14s %14s %14s %12s\n", "output", "jump J", "AD left",
+           "AD right", "J/(AD*k)");
+    {
+        double jump = total_lateral_from_vector(y_plus) - total_lateral_from_vector(y_minus);
+        double ad_left = total_lateral_from_vector(dy_minus);
+        double ad_right = total_lateral_from_vector(dy_plus);
+        printf("   %-22s %14.6e %14.7e %14.7e %12.3e\n", "lateral_total_m",
+               jump, ad_left, ad_right, jump / (ad_left * klf_minus));
+    }
+    for (int j = 0; j < 5; j++) {
+        int k = show_index[j];
+        double jump = y_plus[k] - y_minus[k];
+        double equivalent = 0.0;
+
+        if (fabs(dy_minus[k]) > TINY_DERIVATIVE_SCALE) {
+            equivalent = jump / (dy_minus[k] * klf_minus);
+        }
+        printf("   %-22s %14.6e %14.7e %14.7e %12.3e\n", output_label[k],
+               jump, dy_minus[k], dy_plus[k], equivalent);
+    }
+}
+
+static void experiment_6_exponential_lateral(const char *output_dir,
+                                             const char *forcing_path)
+{
+    static double rain_mm_per_h[E4_N_STEPS_H];
+    static double pet_mm_per_h[E4_N_STEPS_H];
+    static int n_sub_scratch[MAX_STEPS];
+    const double single_step_klf[3] = {1.0e-3, 5.0e-2, 3.0e-1};
+    const double compare_klf[3] = {BASELINE_KLF_M_PER_H, 1.0e-3, 1.0e-2};
+    const char *scheme_label[2] = {"Euler", "exponential"};
+    double theta_in[NDISC];
+    double theta_fc;
+    double zero_forcing[1];
+    int n_steps;
+    SweepSummary adaptive_summary;
+    SweepSummary fixed_summary;
+    FILE *fp;
+
+    theta_fc = klf_experiment_theta_fc();
+    baseline_entering_state(theta_in);
+    zero_forcing[0] = 0.0;
+
+    printf("\n====================================================================\n");
+    printf("E6  EXACT EXPONENTIAL LATERAL REMOVAL versus FORWARD EULER\n");
+    printf("====================================================================\n");
+
+    /* --- E6a one timestep, baseline state, no forcing --- */
+    printf("E6a  one timestep, baseline state, no rain, no PET (n_sub = 1)\n");
+    printf("     analytic exponential check: d(lat_i)/dk = (lat_i/k) * a_i/(exp(a_i)-1),\n");
+    printf("     a_i = k * dt / (dz_i * (theta_sat - theta_fc))\n");
+    for (int i_klf = 0; i_klf < 3; i_klf++) {
+        double klf = single_step_klf[i_klf];
+        double h = klf * 1.0e-6;
+        double y_euler[N_OUTPUTS];
+        double dy_euler[N_OUTPUTS];
+        double y_exp[N_OUTPUTS];
+        double dy_exp[N_OUTPUTS];
+        double y_plus[N_OUTPUTS];
+        double y_minus[N_OUTPUTS];
+
+        evaluate_tangent_nsub(klf, theta_in, 1, 0, 0, zero_forcing, zero_forcing,
+                              y_euler, dy_euler, n_sub_scratch);
+        evaluate_tangent_nsub(klf, theta_in, 1, 0, 1, zero_forcing, zero_forcing,
+                              y_exp, dy_exp, n_sub_scratch);
+        evaluate_primal_nsub(klf + h, theta_in, 1, 0, 1, zero_forcing, zero_forcing,
+                             y_plus, n_sub_scratch);
+        evaluate_primal_nsub(klf - h, theta_in, 1, 0, 1, zero_forcing, zero_forcing,
+                             y_minus, n_sub_scratch);
+
+        printf("\n   k_lf = %.3e m/h   n_sub = %d\n", klf, n_sub_scratch[0]);
+        printf("   %-6s %14s %14s %14s %14s %14s %10s\n", "disc",
+               "Euler lat", "Euler AD", "exp lat", "exp AD", "exp analytic", "FD-AD rel");
+        for (int i_disc = 0; i_disc < NDISC; i_disc++) {
+            double a = klf * 1.0 / (disc_thickness_m[i_disc] *
+                                    (THETA_SAT_M3_PER_M3 - theta_fc));
+            double analytic = (y_exp[i_disc] / klf) * a / (exp(a) - 1.0);
+            double fd = (y_plus[i_disc] - y_minus[i_disc]) / (2.0 * h);
+
+            printf("   %-6d %14.7e %14.7e %14.7e %14.7e %14.7e %10.2e\n", i_disc,
+                   y_euler[i_disc], dy_euler[i_disc], y_exp[i_disc], dy_exp[i_disc],
+                   analytic, relative_difference_from_ad(fd, dy_exp[i_disc]));
+        }
+        printf("   derivative volume residual: Euler %.2e   exponential %.2e\n",
+               derivative_volume_residual(dy_euler), derivative_volume_residual(dy_exp));
+    }
+
+    n_steps = read_forcing_csv(forcing_path, E4_N_STEPS_H, rain_mm_per_h, pet_mm_per_h);
+    if (n_steps <= 0) {
+        printf("\nE6b-d skipped: could not read forcing file %s\n", forcing_path);
+        return;
+    }
+
+    /* --- E6b exponential, adaptive n_sub sweep --- */
+    printf("\nE6b-c  same %d-hour observed forcing and k_lf sweep as E5\n", n_steps);
+    fp = open_csv(output_dir, "e6_sweep_exponential_adaptive.csv");
+    sweep_klf(0, 1, theta_in, n_steps, rain_mm_per_h, pet_mm_per_h, fp, &adaptive_summary);
+    fclose(fp);
+    print_sweep_summary("E6b EXPONENTIAL lateral, ADAPTIVE n_sub", &adaptive_summary);
+    print_switch_jumps("E6b", 1, &adaptive_summary, theta_in, n_steps,
+                       rain_mm_per_h, pet_mm_per_h);
+
+    /* --- E6c exponential, fixed n_sub sweep --- */
+    fp = open_csv(output_dir, "e6_sweep_exponential_fixed12.csv");
+    sweep_klf(E5_FIXED_N_SUB, 1, theta_in, n_steps, rain_mm_per_h, pet_mm_per_h,
+              fp, &fixed_summary);
+    fclose(fp);
+    print_sweep_summary("E6c EXPONENTIAL lateral, FIXED n_sub = 12", &fixed_summary);
+
+    /* --- E6d sensitivity of values and derivatives to n_sub, both schemes --- */
+    printf("\nE6d  adaptive versus fixed n_sub = 12, for each lateral scheme\n");
+    printf("     (rel = (fixed12 - adaptive)/|adaptive|; smaller means less\n");
+    printf("      dependence on the time discretization)\n");
+    printf("%-9s %-18s %-12s %15s %15s %10s %10s\n", "k_lf", "output", "scheme",
+           "AD adaptive", "AD fixed12", "AD rel", "value rel");
+    for (int i_klf = 0; i_klf < 3; i_klf++) {
+        double klf = compare_klf[i_klf];
+
+        for (int scheme = 0; scheme < 2; scheme++) {
+            double y_a[N_OUTPUTS];
+            double dy_a[N_OUTPUTS];
+            double y_f[N_OUTPUTS];
+            double dy_f[N_OUTPUTS];
+            double key_value_a[3];
+            double key_value_f[3];
+            double key_ad_a[3];
+            double key_ad_f[3];
+            const char *key_name[3] = {"lateral_total_m", "percolation_m", "theta_out[0]"};
+
+            evaluate_tangent_nsub(klf, theta_in, n_steps, 0, scheme,
+                                  rain_mm_per_h, pet_mm_per_h, y_a, dy_a, n_sub_scratch);
+            evaluate_tangent_nsub(klf, theta_in, n_steps, E5_FIXED_N_SUB, scheme,
+                                  rain_mm_per_h, pet_mm_per_h, y_f, dy_f, n_sub_scratch);
+
+            key_value_a[0] = total_lateral_from_vector(y_a);
+            key_value_f[0] = total_lateral_from_vector(y_f);
+            key_ad_a[0] = total_lateral_from_vector(dy_a);
+            key_ad_f[0] = total_lateral_from_vector(dy_f);
+            key_value_a[1] = y_a[IDX_PERC];
+            key_value_f[1] = y_f[IDX_PERC];
+            key_ad_a[1] = dy_a[IDX_PERC];
+            key_ad_f[1] = dy_f[IDX_PERC];
+            key_value_a[2] = y_a[IDX_THETA_0];
+            key_value_f[2] = y_f[IDX_THETA_0];
+            key_ad_a[2] = dy_a[IDX_THETA_0];
+            key_ad_f[2] = dy_f[IDX_THETA_0];
+
+            for (int j = 0; j < 3; j++) {
+                printf("%-9.1e %-18s %-12s %15.8e %15.8e %10.2e %10.2e\n",
+                       klf, key_name[j], scheme_label[scheme],
+                       key_ad_a[j], key_ad_f[j],
+                       relative_difference_from_ad(key_ad_f[j], key_ad_a[j]),
+                       relative_difference_from_ad(key_value_f[j], key_value_a[j]));
+            }
+            printf("%-9.1e %-18s %-12s derivative volume residual: adaptive %.2e  fixed12 %.2e\n",
+                   klf, "", scheme_label[scheme],
+                   derivative_volume_residual(dy_a), derivative_volume_residual(dy_f));
         }
     }
 }
@@ -1425,7 +1643,7 @@ int main(int argc, char **argv)
     const char *output_dir = ".";
     const char *forcing_path = "forcing/rain_pet_example.csv";
 
-    const char *experiments = "12345";
+    const char *experiments = "123456";
 
     if (argc > 1) output_dir = argv[1];
     if (argc > 2) forcing_path = argv[2];
@@ -1439,6 +1657,7 @@ int main(int argc, char **argv)
     if (strchr(experiments, '3') != NULL) experiment_3_drydown(output_dir);
     if (strchr(experiments, '4') != NULL) experiment_4_observed_forcing(output_dir, forcing_path);
     if (strchr(experiments, '5') != NULL) experiment_5_n_sub_boundaries(output_dir, forcing_path);
+    if (strchr(experiments, '6') != NULL) experiment_6_exponential_lateral(output_dir, forcing_path);
 
     return 0;
 }

@@ -81,6 +81,15 @@ double remove_lateral_to_subsurface_nash_substep(double theta[NDISC], const doub
                                                  double rate_const_m_per_h, double dt_sub,
                                                  double removed_by_disc_accum_m[NDISC]);
 
+/* Lateral removal integrated exactly over the substep (m removed this substep).
+   Solves d(theta)/dt = -k_lf (theta - theta_fc) / (dz (theta_sat - theta_fc))
+   for theta > theta_fc; never drains a disc below theta_fc. */
+double remove_lateral_to_subsurface_nash_substep_exponential(
+                                                 double theta[NDISC], const double dz[NDISC],
+                                                 double theta_fc, double theta_sat,
+                                                 double rate_const_m_per_h, double dt_sub,
+                                                 double removed_by_disc_accum_m[NDISC]);
+
 /* ---------- Hydrostatic initialization ---------- */
 void initialize_hydrostatic_from_storage(double soil_depth_m,
                                          double theta_sat, double phi_sat_cm, double b_exp,

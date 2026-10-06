@@ -401,11 +401,22 @@ int soil_step_one_hour_stateless(
         }
 
         // D11) lateral removal to Nash (only if any disc > FC)
+        // Default: forward-Euler step with storage cap.  With
+        // ctrl->lateral_analytic, the linear-reservoir removal is integrated
+        // exactly over the substep (same physics, no dependence on n_sub).
         if (par->klf_m_per_h > 0.0 && any_disc_above(theta, par->theta_fc, ndisc)) {
-            double lat_removed =
-                remove_lateral_to_subsurface_nash_substep(
-                    theta, geom->dz, par->theta_fc, par->theta_sat,
-                    par->klf_m_per_h, dt_sub, flux->lateral_by_disc_m);
+            double lat_removed;
+            if (ctrl->lateral_analytic) {
+                lat_removed =
+                    remove_lateral_to_subsurface_nash_substep_exponential(
+                        theta, geom->dz, par->theta_fc, par->theta_sat,
+                        par->klf_m_per_h, dt_sub, flux->lateral_by_disc_m);
+            } else {
+                lat_removed =
+                    remove_lateral_to_subsurface_nash_substep(
+                        theta, geom->dz, par->theta_fc, par->theta_sat,
+                        par->klf_m_per_h, dt_sub, flux->lateral_by_disc_m);
+            }
 
             volbal->lateral_m += lat_removed;
         }

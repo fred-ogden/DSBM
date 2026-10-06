@@ -4,10 +4,11 @@
 #
 # One-command build and run of the k_lf Tapenade tangent experiments
 # (E1 single timestep, E2 storage-cap kink, E3 drydown with theta_fc
-# crossings, E4 observed forcing, E5 adaptive n_sub boundaries).
+# crossings, E4 observed forcing, E5 adaptive n_sub boundaries,
+# E6 exponential versus Euler lateral removal).
 #
 # Usage, from the repository root:
-#     ./run_tapenade_klf.csh            (all experiments, E1-E5)
+#     ./run_tapenade_klf.csh            (all experiments, E1-E6)
 #     ./run_tapenade_klf.csh 5          (E5 only; any digit string works)
 #
 # Steps:
@@ -25,7 +26,7 @@
 # by git.  ASCII only.
 
 set nonomatch
-set experiments = 12345
+set experiments = 123456
 if ( $#argv > 0 ) set experiments = "$1"
 set ndisc = 4
 set theta_min = 1.0e-03
