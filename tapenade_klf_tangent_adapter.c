@@ -19,7 +19,8 @@
  *
  *   void dsbm_lateral_from_klf_d(
  *       double klf_m_per_h, double klf_m_per_hd,
- *       const double *theta_in, int n_steps, int n_sub_fixed,
+ *       const double *theta_in, int n_steps,
+ *       int n_sub_fixed, int n_sub_fixedd,
  *       const double *rain_mm_per_h, const double *pet_mm_per_h,
  *       double *lateral_total_by_disc_m, double *lateral_total_by_disc_md,
  *       double *theta_out, double *theta_outd,
@@ -28,6 +29,11 @@
  *       double *precipitation_excess_total_m,
  *       double *precipitation_excess_total_md,
  *       int *n_sub_used_by_step);
+ *
+ * n_sub_fixedd: Tapenade copies n_sub_fixed into the SoilControl
+ * structure, treats that whole structure as differentiable, and so
+ * emits a tangent slot for this integer.  A substep count has no
+ * derivative; the adapter passes 0.
  *
  * run_tapenade_klf.csh prints the actual generated prototype so it can be
  * compared with this.
@@ -57,9 +63,11 @@ void klf_tangent_from_tapenade(double klf_m_per_h,
 {
     /* seed: d(klf)/d(klf) = 1 */
     const double klf_seed = 1.0;
+    /* integer substep count: no tangent */
+    const int n_sub_fixed_tangent = 0;
 
     dsbm_lateral_from_klf_d(klf_m_per_h, klf_seed,
-                            theta_in, n_steps, n_sub_fixed,
+                            theta_in, n_steps, n_sub_fixed, n_sub_fixed_tangent,
                             rain_mm_per_h, pet_mm_per_h,
                             lateral_total_by_disc_m, d_lateral_total_by_disc_m_d_klf,
                             theta_out, d_theta_out_d_klf,
