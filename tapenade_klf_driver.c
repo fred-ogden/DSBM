@@ -56,10 +56,17 @@
  *       and derivatives depend on adaptive versus fixed n_sub = 12 under
  *       each scheme.
  *
+ *   E7  Cures for the adaptive n_sub sensitivity, with the exponential
+ *       lateral scheme: production adaptive n_sub, adaptive with a
+ *       minimum of 2 or 4, adaptive with a lateral-rate severity
+ *       criterion, and fixed 4, against fixed n_sub = 12 (fixed 24 as a
+ *       convergence check).  k_lf sweeps for jumps and cost, and AD and
+ *       values at five k_lf compared with fixed 12.
+ *
  * Usage:
  *   tapenade_klf_derivative_test  output_directory  forcing_csv_file  [experiments]
  *
- *   experiments is a string of digits, default "123456"; e.g. "6" runs E6 only.
+ *   experiments is a string of digits, default "1234567"; e.g. "7" runs E7 only.
  *
  * Terminology: soil moisture; discs; cost function.
  * ASCII only.
@@ -86,6 +93,8 @@ void dsbm_lateral_from_klf(double klf_m_per_h,
                            int n_steps,
                            int n_sub_fixed,
                            int lateral_analytic,
+                           int n_sub_minimum,
+                           int lateral_substep_severity,
                            const double *rain_mm_per_h,
                            const double *pet_mm_per_h,
                            double *lateral_total_by_disc_m,
@@ -100,6 +109,8 @@ void klf_tangent_from_tapenade(double klf_m_per_h,
                                int n_steps,
                                int n_sub_fixed,
                                int lateral_analytic,
+                               int n_sub_minimum,
+                               int lateral_substep_severity,
                                const double *rain_mm_per_h,
                                const double *pet_mm_per_h,
                                double *lateral_total_by_disc_m,
@@ -152,6 +163,14 @@ static const char *output_label[N_OUTPUTS] = {
 #define TINY_DERIVATIVE_SCALE     1.0e-14
 
 
+/*
+ * Adaptive-substep refinements tested in E7.  Every primal and tangent
+ * evaluation passes these to the wrapper.  They stay 0 (production
+ * adaptive behavior) except while E7 runs a particular scheme.
+ */
+static int substep_option_n_sub_minimum = 0;
+static int substep_option_lateral_severity = 0;
+
 /* ------------------------------------------------------------------ */
 /* Packing helpers                                                     */
 /* ------------------------------------------------------------------ */
@@ -178,6 +197,7 @@ static void evaluate_primal_nsub(double klf_m_per_h,
     int i_disc;
 
     dsbm_lateral_from_klf(klf_m_per_h, theta_in, n_steps, n_sub_fixed, lateral_analytic,
+                          substep_option_n_sub_minimum, substep_option_lateral_severity,
                           rain_mm_per_h, pet_mm_per_h,
                           lateral_m, theta_out, &perc_m, &aet_m, &excess_m,
                           n_sub_used_by_step);
@@ -216,6 +236,7 @@ static void evaluate_tangent_nsub(double klf_m_per_h,
     int i_disc;
 
     klf_tangent_from_tapenade(klf_m_per_h, theta_in, n_steps, n_sub_fixed, lateral_analytic,
+                              substep_option_n_sub_minimum, substep_option_lateral_severity,
                               rain_mm_per_h, pet_mm_per_h,
                               lateral_m, d_lateral_m,
                               theta_out, d_theta_out,
@@ -1030,6 +1051,7 @@ typedef struct {
     double worst_switch_klf_high;
     double worst_switch_rel_mismatch;
     long total_substeps_at_first_point;
+    double mean_substeps_per_run;
 } SweepSummary;
 
 static void sweep_klf(int n_sub_fixed,
@@ -1073,6 +1095,7 @@ static void sweep_klf(int n_sub_fixed,
     summary->worst_switch_klf_high = 0.0;
     summary->worst_switch_rel_mismatch = -1.0;
     summary->total_substeps_at_first_point = 0;
+    summary->mean_substeps_per_run = 0.0;
 
     fprintf(fp, "klf_m_per_h,lateral_total_m,AD_lateral_total,percolation_m,AD_percolation,"
                 "theta3,AD_theta3,n_sub_total,n_steps_changed_from_previous,"
@@ -1101,6 +1124,8 @@ static void sweep_klf(int n_sub_fixed,
             n_sub_total = n_sub_total + n_sub_current[i_step];
         }
         if (i_pt == 0) summary->total_substeps_at_first_point = n_sub_total;
+        summary->mean_substeps_per_run =
+            summary->mean_substeps_per_run + (double)n_sub_total / (double)E5_N_SWEEP;
 
         n_steps_changed = 0;
         for (k = 0; k < E5_N_KEY_OUTPUTS; k++) rel_mismatch[k] = 0.0;
@@ -1588,6 +1613,143 @@ static void experiment_6_exponential_lateral(const char *output_dir,
 }
 
 
+/* ------------------------------------------------------------------ */
+/* E7: cures for the adaptive n_sub sensitivity                        */
+/* ------------------------------------------------------------------ */
+
+typedef struct {
+    const char *label;
+    int n_sub_fixed;
+    int n_sub_minimum;
+    int lateral_severity;
+} SubstepScheme;
+
+#define E7_N_SCHEMES      7
+#define E7_N_KEY_KLF      5
+#define E7_REFERENCE      5     /* index of fixed n_sub = 12 in the scheme list */
+
+static const SubstepScheme e7_schemes[E7_N_SCHEMES] = {
+    {"adaptive (production)",        0, 0, 0},
+    {"adaptive, minimum 2",          0, 2, 0},
+    {"adaptive, minimum 4",          0, 4, 0},
+    {"adaptive + lateral severity",  0, 0, 1},
+    {"fixed 4",                      4, 0, 0},
+    {"fixed 12 (reference)",        12, 0, 0},
+    {"fixed 24 (reference check)",  24, 0, 0}
+};
+
+static void set_substep_scheme(const SubstepScheme *scheme)
+{
+    substep_option_n_sub_minimum = scheme->n_sub_minimum;
+    substep_option_lateral_severity = scheme->lateral_severity;
+}
+
+static void experiment_7_n_sub_cures(const char *output_dir,
+                                     const char *forcing_path)
+{
+    static double rain_mm_per_h[E4_N_STEPS_H];
+    static double pet_mm_per_h[E4_N_STEPS_H];
+    static int n_sub_scratch[MAX_STEPS];
+    const double key_klf_m_per_h[E7_N_KEY_KLF] = {5.0e-6, 1.0e-4, 1.0e-3, 1.0e-2, 5.0e-2};
+    const int exponential_lateral = 1;
+    double theta_in[NDISC];
+    double key_value[E7_N_SCHEMES][E7_N_KEY_KLF][4];
+    double key_ad[E7_N_SCHEMES][E7_N_KEY_KLF][4];
+    long key_substeps[E7_N_SCHEMES][E7_N_KEY_KLF];
+    SweepSummary summary;
+    int n_steps;
+    char csv_name[128];
+    FILE *fp;
+
+    n_steps = read_forcing_csv(forcing_path, E4_N_STEPS_H, rain_mm_per_h, pet_mm_per_h);
+    if (n_steps <= 0) {
+        printf("\nE7 skipped: could not read forcing file %s\n", forcing_path);
+        return;
+    }
+    baseline_entering_state(theta_in);
+
+    printf("\n====================================================================\n");
+    printf("E7  CURES FOR ADAPTIVE n_sub SENSITIVITY (exponential lateral scheme)\n");
+    printf("====================================================================\n");
+    printf("%d-hour observed forcing, %d log-spaced k_lf from 1e-4 to 1e-1 m/h.\n",
+           n_steps, E5_N_SWEEP);
+    printf("lateral severity: adaptive n_sub also keeps k_lf*dt_sub/(dz*(theta_sat-theta_fc))\n");
+    printf("                  at or below about 0.2 for discs above theta_fc.\n");
+
+    /* --- E7a sweep each scheme (the fixed 24 check is too costly to sweep) --- */
+    printf("\nE7a  k_lf sweeps: n_sub switches, jumps (equivalent dk/k), cost\n");
+    printf("%-28s %9s %8s %12s %12s %12s %12s\n", "scheme", "switches",
+           "mean", "lat switch", "lat switch", "perc switch", "lat smooth");
+    printf("%-28s %9s %8s %12s %12s %12s %12s\n", "", "(of 1999)",
+           "substeps", "median", "max", "max", "max");
+    for (int i_scheme = 0; i_scheme < E7_N_SCHEMES - 1; i_scheme++) {
+        const SubstepScheme *scheme = &e7_schemes[i_scheme];
+
+        set_substep_scheme(scheme);
+        snprintf(csv_name, sizeof(csv_name), "e7_sweep_scheme_%d.csv", i_scheme);
+        fp = open_csv(output_dir, csv_name);
+        sweep_klf(scheme->n_sub_fixed, exponential_lateral, theta_in, n_steps,
+                  rain_mm_per_h, pet_mm_per_h, fp, &summary);
+        fclose(fp);
+        printf("%-28s %9d %8.0f %12.3e %12.3e %12.3e %12.3e\n", scheme->label,
+               summary.n_intervals_with_n_sub_change, summary.mean_substeps_per_run,
+               summary.median_rel_mismatch_switch[0], summary.max_rel_mismatch_switch[0],
+               summary.max_rel_mismatch_switch[1], summary.max_rel_mismatch_smooth[0]);
+    }
+    printf("(sweep CSVs: e7_sweep_scheme_<n>.csv, n = row order above)\n");
+
+    /* --- E7b accuracy against fixed n_sub = 12 at key k_lf values --- */
+    for (int i_scheme = 0; i_scheme < E7_N_SCHEMES; i_scheme++) {
+        const SubstepScheme *scheme = &e7_schemes[i_scheme];
+
+        set_substep_scheme(scheme);
+        for (int i_klf = 0; i_klf < E7_N_KEY_KLF; i_klf++) {
+            double y[N_OUTPUTS];
+            double dy[N_OUTPUTS];
+            long substeps = 0;
+
+            evaluate_tangent_nsub(key_klf_m_per_h[i_klf], theta_in, n_steps,
+                                  scheme->n_sub_fixed, exponential_lateral,
+                                  rain_mm_per_h, pet_mm_per_h, y, dy, n_sub_scratch);
+            for (int i_step = 0; i_step < n_steps; i_step++) {
+                substeps = substeps + n_sub_scratch[i_step];
+            }
+            key_substeps[i_scheme][i_klf] = substeps;
+            key_value[i_scheme][i_klf][0] = total_lateral_from_vector(y);
+            key_ad[i_scheme][i_klf][0] = total_lateral_from_vector(dy);
+            key_value[i_scheme][i_klf][1] = y[IDX_PERC];
+            key_ad[i_scheme][i_klf][1] = dy[IDX_PERC];
+            key_value[i_scheme][i_klf][2] = y[IDX_THETA_0];
+            key_ad[i_scheme][i_klf][2] = dy[IDX_THETA_0];
+            key_value[i_scheme][i_klf][3] = derivative_volume_residual(dy);
+            key_ad[i_scheme][i_klf][3] = 0.0;
+        }
+    }
+    set_substep_scheme(&e7_schemes[0]);
+
+    printf("\nE7b  relative difference from fixed n_sub = 12 (AD = d/dk_lf)\n");
+    for (int i_klf = 0; i_klf < E7_N_KEY_KLF; i_klf++) {
+        printf("\n--- k_lf = %.1e m/h ---\n", key_klf_m_per_h[i_klf]);
+        printf("%-28s %9s %11s %11s %11s %11s %10s\n", "scheme", "substeps",
+               "AD lateral", "AD perc", "AD theta0", "val lateral", "AD volres");
+        for (int i_scheme = 0; i_scheme < E7_N_SCHEMES; i_scheme++) {
+            double rel[4];
+
+            for (int k = 0; k < 3; k++) {
+                rel[k] = relative_difference_from_ad(key_ad[i_scheme][i_klf][k],
+                                                     key_ad[E7_REFERENCE][i_klf][k]);
+            }
+            rel[3] = relative_difference_from_ad(key_value[i_scheme][i_klf][0],
+                                                 key_value[E7_REFERENCE][i_klf][0]);
+            printf("%-28s %9ld %11.2e %11.2e %11.2e %11.2e %10.1e\n",
+                   e7_schemes[i_scheme].label, key_substeps[i_scheme][i_klf],
+                   rel[0], rel[1], rel[2], rel[3], key_value[i_scheme][i_klf][3]);
+        }
+    }
+    printf("\n(fixed 24 shows how far fixed 12 itself is from convergence)\n");
+}
+
+
 /*
  * Consistency check run before any experiment: the primal wrapper (linked
  * against libsoil.a) and the Tapenade tangent (which carries its own copy
@@ -1643,7 +1805,7 @@ int main(int argc, char **argv)
     const char *output_dir = ".";
     const char *forcing_path = "forcing/rain_pet_example.csv";
 
-    const char *experiments = "123456";
+    const char *experiments = "1234567";
 
     if (argc > 1) output_dir = argv[1];
     if (argc > 2) forcing_path = argv[2];
@@ -1658,6 +1820,7 @@ int main(int argc, char **argv)
     if (strchr(experiments, '4') != NULL) experiment_4_observed_forcing(output_dir, forcing_path);
     if (strchr(experiments, '5') != NULL) experiment_5_n_sub_boundaries(output_dir, forcing_path);
     if (strchr(experiments, '6') != NULL) experiment_6_exponential_lateral(output_dir, forcing_path);
+    if (strchr(experiments, '7') != NULL) experiment_7_n_sub_cures(output_dir, forcing_path);
 
     return 0;
 }

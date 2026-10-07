@@ -41,6 +41,9 @@ typedef struct {
     int    use_ch_lookup_table;   // 1 => use LUT; 0 => analytic CH
     int    apply_fc_perc_threshold; // 1 => bottom drainage only above theta_fc
     int    n_sub_fixed;           // 0 => adaptive n_sub (default); >0 => fixed substep count
+    int    n_sub_minimum;         // 0 => no floor (default); >0 => adaptive n_sub is at least this
+    int    substep_lateral_severity; // 0 => adaptive n_sub ignores lateral flow (default);
+                                  // 1 => adaptive n_sub also considers lateral removal rate
     int    lateral_scheme;        // LATERAL_SCHEME_EXPONENTIAL (0, default) or
                                   // LATERAL_SCHEME_FORWARD_EULER (1)
     double dt_hours;              // usually 1.0

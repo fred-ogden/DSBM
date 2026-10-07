@@ -72,14 +72,22 @@ static inline int any_disc_above(const double *theta, double thresh, int ndisc)
     return 0;
 }
 
+// Fraction of a disc's soil moisture above theta_fc that the lateral
+// linear reservoir would remove per substep (linearized, a = k dt/(dz
+// (theta_sat - theta_fc))) at which the optional lateral severity equals 1.
+// Matches the 0.20 used for the rain criterion below.
+#define LATERAL_SEVERITY_FRACTION_PER_SUBSTEP 0.20
+
 // Pick a conservative substep count based on initial fluxes and rainfall demand.
-// Generic across NDISC.
+// Generic across NDISC.  lateral_severity is 0 unless the optional lateral
+// criterion is enabled (ctrl->substep_lateral_severity).
 static int choose_n_sub_generic(double dt_hours,
                                 double rain_mm_per_h,
                                 const double *dz,
                                 const double *theta, double theta_sat,
                                 const double *q0_m_per_h, // [0..NDISC-2]
-                                int ndisc)
+                                int ndisc,
+                                double lateral_severity)
 {
     int nintf = ndisc - 1;
 
@@ -108,6 +116,7 @@ static int choose_n_sub_generic(double dt_hours,
     double severity = 0.0;
     if (flux_ratio > severity) severity = flux_ratio;
     if (rain_ratio > severity) severity = rain_ratio;
+    if (lateral_severity > severity) severity = lateral_severity;
 
     int n_sub;
     if (severity <= 1.0)       n_sub = (rain_mm_per_h > 0.0) ? 2 : 1;
@@ -183,12 +192,36 @@ int soil_step_one_hour_stateless(
     // Adaptive substep count by default.  A positive ctrl->n_sub_fixed
     // overrides it (used to test how adaptive time discretization
     // affects derivatives with respect to calibration parameters).
+    //
+    // Optional refinements of the adaptive choice (both off by default):
+    //   ctrl->substep_lateral_severity: also require that the lateral
+    //     linear reservoir removes no more than
+    //     LATERAL_SEVERITY_FRACTION_PER_SUBSTEP of a disc's moisture above
+    //     theta_fc per substep (linearized), for discs above theta_fc;
+    //   ctrl->n_sub_minimum: a floor on the adaptive substep count.
+    double lateral_severity = 0.0;
+    if (ctrl->substep_lateral_severity && par->klf_m_per_h > 0.0) {
+        double fc_to_sat_range = par->theta_sat - par->theta_fc;
+        if (fc_to_sat_range < 1.0e-12) fc_to_sat_range = 1.0e-12;
+        for (int i = 0; i < ndisc; i++) {
+            if (theta[i] > par->theta_fc) {
+                double lateral_exponent_per_hour =
+                    par->klf_m_per_h * dtH / (geom->dz[i] * fc_to_sat_range);
+                double disc_severity =
+                    lateral_exponent_per_hour / LATERAL_SEVERITY_FRACTION_PER_SUBSTEP;
+                if (disc_severity > lateral_severity) lateral_severity = disc_severity;
+            }
+        }
+    }
+
     int n_sub;
     if (ctrl->n_sub_fixed > 0) {
         n_sub = ctrl->n_sub_fixed;
     } else {
         n_sub = choose_n_sub_generic(dtH, forcing->rain_mm_per_h,
-                                     geom->dz, theta, par->theta_sat, q0, ndisc);
+                                     geom->dz, theta, par->theta_sat, q0, ndisc,
+                                     lateral_severity);
+        if (n_sub < ctrl->n_sub_minimum) n_sub = ctrl->n_sub_minimum;
     }
     if (n_sub < 1) n_sub = 1;
     flux->n_sub_used = n_sub;

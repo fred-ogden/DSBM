@@ -109,6 +109,9 @@ static void usage(const char *prog)
         "  --apply-fc-perc-threshold       Restrict bottom drainage to water above theta_fc.\n"
         "  --n-sub-fixed <int>            DSBM: use this fixed substep count instead of\n"
         "                                 the adaptive choice (default 0 = adaptive).\n"
+        "  --n-sub-minimum <int>          DSBM: floor on the adaptive substep count.\n"
+        "  --substep-lateral-severity     DSBM: adaptive substep count also limits the\n"
+        "                                 lateral removal fraction per substep.\n"
         "  --lateral-forward-euler        DSBM: use the legacy forward-Euler lateral\n"
         "                                 removal instead of the default exact\n"
         "                                 exponential solution within each substep.\n"
@@ -253,6 +256,11 @@ int parse_args(int argc, char **argv, DriverOpts *o)
         } else if (!strcmp(a, "--n-sub-fixed") && i+1 < argc) {
             if (parse_int(argv[++i], &o->n_sub_fixed)) return -1;
             if (o->n_sub_fixed < 0) return -1;
+        } else if (!strcmp(a, "--n-sub-minimum") && i+1 < argc) {
+            if (parse_int(argv[++i], &o->n_sub_minimum)) return -1;
+            if (o->n_sub_minimum < 0) return -1;
+        } else if (!strcmp(a, "--substep-lateral-severity")) {
+            o->substep_lateral_severity = 1;
         } else if (!strcmp(a, "--lateral-forward-euler")) {
             o->lateral_scheme = LATERAL_SCHEME_FORWARD_EULER;
         } else if (!strcmp(a, "--verbosity") && i+1 < argc) {
@@ -436,6 +444,8 @@ static void default_control(SoilControl *ctrl)
     ctrl->use_ch_lookup_table = 0;   // analytic by default
     ctrl->apply_fc_perc_threshold = 0; // native free drainage unless requested
     ctrl->n_sub_fixed = 0;             // adaptive DSBM substeps unless requested
+    ctrl->n_sub_minimum = 0;           // no floor on adaptive substeps unless requested
+    ctrl->substep_lateral_severity = 0;// adaptive substeps ignore lateral rate unless requested
     ctrl->lateral_scheme = LATERAL_SCHEME_EXPONENTIAL; // unless --lateral-forward-euler
     ctrl->dt_hours = 1.0;
 }
@@ -565,6 +575,8 @@ int main(int argc, char **argv)
     ctrl.use_ch_lookup_table = opt.use_lut ? 1 : 0;
     ctrl.apply_fc_perc_threshold = opt.apply_fc_perc_threshold ? 1 : 0;
     ctrl.n_sub_fixed = opt.n_sub_fixed;
+    ctrl.n_sub_minimum = opt.n_sub_minimum;
+    ctrl.substep_lateral_severity = opt.substep_lateral_severity;
     ctrl.lateral_scheme = opt.lateral_scheme;
 
     SoilConfigOptions config;

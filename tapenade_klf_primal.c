@@ -116,6 +116,9 @@ double klf_experiment_theta_fc(void)
  *                          >0 = fixed substep count every timestep
  *   lateral_analytic       passive: 0 = forward-Euler lateral removal,
  *                          1 = exact exponential integration per substep
+ *   n_sub_minimum          passive: floor on adaptive substeps (0 = none)
+ *   lateral_substep_severity passive: 1 = adaptive substeps also limit the
+ *                          lateral removal fraction per substep
  *   rain_mm_per_h[n_steps] passive: rainfall forcing (mm/h)
  *   pet_mm_per_h[n_steps]  passive: PET forcing (mm/h)
  *
@@ -143,6 +146,8 @@ void dsbm_lateral_from_klf(double klf_m_per_h,
                            int n_steps,
                            int n_sub_fixed,
                            int lateral_analytic,
+                           int n_sub_minimum,
+                           int lateral_substep_severity,
                            const double *rain_mm_per_h,
                            const double *pet_mm_per_h,
                            double *lateral_total_by_disc_m,
@@ -174,6 +179,8 @@ void dsbm_lateral_from_klf(double klf_m_per_h,
     ctrl.apply_fc_perc_threshold = 0;
     ctrl.dt_hours = 1.0;
     ctrl.n_sub_fixed = n_sub_fixed;
+    ctrl.n_sub_minimum = n_sub_minimum;
+    ctrl.substep_lateral_severity = lateral_substep_severity;
     /* wrapper argument keeps its original meaning: 1 = exponential */
     if (lateral_analytic) {
         ctrl.lateral_scheme = LATERAL_SCHEME_EXPONENTIAL;

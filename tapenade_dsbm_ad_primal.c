@@ -90,6 +90,8 @@ void dsbm_percolation_from_ksat(double K_sat_cm_per_h,
     ctrl.use_ch_lookup_table = 0;
     ctrl.apply_fc_perc_threshold = 0;
     ctrl.n_sub_fixed = 0;
+    ctrl.n_sub_minimum = 0;
+    ctrl.substep_lateral_severity = 0;
     ctrl.lateral_scheme = LATERAL_SCHEME_FORWARD_EULER;  /* scheme used when this experiment was run */
     ctrl.dt_hours = 1.0;
 
