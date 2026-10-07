@@ -21,7 +21,7 @@
  *       double klf_m_per_h, double klf_m_per_hd,
  *       const double *theta_in, int n_steps,
  *       int n_sub_fixed, int n_sub_fixedd,
- *       int lateral_analytic, int lateral_analyticd,
+ *       int lateral_analytic,
  *       int n_sub_minimum, int n_sub_minimumd,
  *       int lateral_substep_severity, int lateral_substep_severityd,
  *       const double *rain_mm_per_h, const double *pet_mm_per_h,
@@ -33,11 +33,12 @@
  *       double *precipitation_excess_total_md,
  *       int *n_sub_used_by_step);
  *
- * n_sub_fixedd, lateral_analyticd, n_sub_minimumd,
- * lateral_substep_severityd: Tapenade copies these integers into
- * the SoilControl structure, treats that whole structure as
- * differentiable, and so emits a tangent slot for each.  Integer
- * switches have no derivative; the adapter passes 0.
+ * n_sub_fixedd, n_sub_minimumd, lateral_substep_severityd: the wrapper
+ * copies these integers into the SoilControl structure, which Tapenade
+ * differentiates as a whole, so it emits a tangent slot for each.
+ * lateral_analytic is only tested in an if statement in the wrapper, so
+ * it gets no tangent slot.  Integer switches have no derivative; the
+ * adapter passes 0 for every integer tangent slot.
  *
  * run_tapenade_klf.csh prints the actual generated prototype so it can be
  * compared with this.
@@ -72,13 +73,12 @@ void klf_tangent_from_tapenade(double klf_m_per_h,
     const double klf_seed = 1.0;
     /* integer switches: no tangent */
     const int n_sub_fixed_tangent = 0;
-    const int lateral_analytic_tangent = 0;
     const int n_sub_minimum_tangent = 0;
     const int lateral_substep_severity_tangent = 0;
 
     dsbm_lateral_from_klf_d(klf_m_per_h, klf_seed,
                             theta_in, n_steps, n_sub_fixed, n_sub_fixed_tangent,
-                            lateral_analytic, lateral_analytic_tangent,
+                            lateral_analytic,
                             n_sub_minimum, n_sub_minimum_tangent,
                             lateral_substep_severity, lateral_substep_severity_tangent,
                             rain_mm_per_h, pet_mm_per_h,
