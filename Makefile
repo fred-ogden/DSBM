@@ -76,6 +76,28 @@ $(OBJDIR)/%.o: $(SRCDIR)/%.c | $(OBJDIR)
 $(OBJDIR) $(LIBDIR) $(BINDIR):
 	@mkdir -p $@
 
+# ---- Branch-activity census build ----
+# bin/soil_driver_census: the same driver and kernel with the DSBM_CENSUS()
+# hooks compiled in (-DDSBM_CENSUS_BUILD).  It prints a census of active
+# thresholds, caps and branches at exit.  Objects go to a separate
+# directory so the normal build is never mixed with census objects.
+CENSUSOBJDIR := $(BUILDDIR)/obj_census
+CENSUS_SRC   := $(LIB_SRC) $(DRV_SRC) $(SRCDIR)/dsbm_census.c
+CENSUS_OBJ   := $(CENSUS_SRC:$(SRCDIR)/%.c=$(CENSUSOBJDIR)/%.o)
+CENSUS_BIN   := $(BINDIR)/soil_driver_census
+
+.PHONY: census
+census: $(CENSUS_BIN)
+
+$(CENSUS_BIN): $(CENSUS_OBJ) | $(BINDIR)
+	$(CC) $(CFLAGS) -o $@ $(CENSUS_OBJ) $(LDFLAGS) $(LDLIBS)
+
+$(CENSUSOBJDIR)/%.o: $(SRCDIR)/%.c | $(CENSUSOBJDIR)
+	$(CC) $(CFLAGS) -DDSBM_CENSUS_BUILD -c $< -o $@
+
+$(CENSUSOBJDIR):
+	@mkdir -p $@
+
 # ---- Convenience ----
 .PHONY: release debug clean veryclean print
 release: ; @$(MAKE) MODE=release
@@ -130,4 +152,5 @@ run: $(DRIVER)
 
 # ---- Dependencies ----
 -include $(DEPS)
+-include $(CENSUS_OBJ:.o=.d)
 

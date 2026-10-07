@@ -38,6 +38,7 @@
 #include <stdio.h>
 #include "soil_helpers.h"
 #include "soil_config.h"
+#include "dsbm_census_hooks.h"   // DSBM_CENSUS() is empty except in the census build
 
 #ifndef THETA_MIN
 #define THETA_MIN 1.0e-03   // m3/m3, fictitious minimum water content needed because CH assumes theta_r = 0
@@ -319,7 +320,10 @@ double remove_lateral_to_subsurface_nash_substep(double theta[NDISC], const doub
         if (avail_m < 0.0) avail_m = 0.0;
 
         double take_m = potential_m;
-        if (take_m > avail_m) take_m = avail_m;
+        if (take_m > avail_m) {
+            take_m = avail_m;
+            DSBM_CENSUS(CENSUS_LAT_EULER_CAP, i);
+        }
 
         if (take_m > 0.0) {
             theta[i] -= take_m / dz[i];
