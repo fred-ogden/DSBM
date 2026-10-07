@@ -322,7 +322,7 @@ double remove_lateral_to_subsurface_nash_substep(double theta[NDISC], const doub
         double take_m = potential_m;
         if (take_m > avail_m) {
             take_m = avail_m;
-            DSBM_CENSUS(CENSUS_LAT_EULER_CAP, i);
+            DSBM_CENSUS(CENSUS_LAT_EULER_CAP, i)
         }
 
         if (take_m > 0.0) {

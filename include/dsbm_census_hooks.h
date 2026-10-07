@@ -65,9 +65,18 @@
 
 #define CENSUS_N_EVENTS             26
 
+/*
+ * The hook supplies its own semicolon and is written in the kernel
+ * WITHOUT one, so the normal build is left with no tokens at all: no
+ * empty statements and no empty if or loop bodies.  (Empty bodies are
+ * the suspected cause of a Tapenade 3.16 crash in flow-graph
+ * differentiation, seen after the hooks were added.)  Code that
+ * exists only for the census, such as an if whose only content is a
+ * hook, is placed inside #ifdef DSBM_CENSUS_BUILD instead.
+ */
 #ifdef DSBM_CENSUS_BUILD
 void dsbm_census_count(int event_id, int index);
-#define DSBM_CENSUS(event_id, index) dsbm_census_count((event_id), (index))
+#define DSBM_CENSUS(event_id, index) dsbm_census_count((event_id), (index));
 #else
 #define DSBM_CENSUS(event_id, index)
 #endif

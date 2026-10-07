@@ -232,7 +232,7 @@ int soil_step_one_hour_stateless(
     }
     if (n_sub < 1) n_sub = 1;
     flux->n_sub_used = n_sub;
-    DSBM_CENSUS(CENSUS_TIMESTEP, n_sub);
+    DSBM_CENSUS(CENSUS_TIMESTEP, n_sub)
 
     const double dt_sub = dtH / (double)n_sub;
 
@@ -256,12 +256,14 @@ int soil_step_one_hour_stateless(
         double used   = rain_sub;
         if (used > cap1) {
             used = cap1;
-            DSBM_CENSUS(CENSUS_RAIN_CAPPED, 0);
+            DSBM_CENSUS(CENSUS_RAIN_CAPPED, 0)
         }
-        DSBM_CENSUS(CENSUS_SUBSTEP, 0);
+#ifdef DSBM_CENSUS_BUILD
+        DSBM_CENSUS(CENSUS_SUBSTEP, 0)
         if (rain_sub > 0.0) {
-            DSBM_CENSUS(CENSUS_RAIN, 0);
+            DSBM_CENSUS(CENSUS_RAIN, 0)
         }
+#endif
 
         double excess = rain_sub - used;
         if (excess < 0.0) excess = 0.0;
@@ -293,12 +295,14 @@ int soil_step_one_hour_stateless(
                                           geom->dz[i], geom->dz[i+1]);
             V_if[i] = q * dt_sub;
             pot_downflux[i] = (q > 0.0) ? (q * dt_sub) : 0.0;
+#ifdef DSBM_CENSUS_BUILD
             if (q > 0.0) {
-                DSBM_CENSUS(CENSUS_FLUX_DOWN, i);
+                DSBM_CENSUS(CENSUS_FLUX_DOWN, i)
             }
             if (q < 0.0) {
-                DSBM_CENSUS(CENSUS_FLUX_UP, i);
+                DSBM_CENSUS(CENSUS_FLUX_UP, i)
             }
+#endif
         }
 
         // D4) per-disc free storage up to saturation
@@ -330,7 +334,7 @@ int soil_step_one_hour_stateless(
             if (down_index >= ndisc) down_index = ndisc;
             if (pass > Accept[down_index]) {
                 pass = Accept[down_index];
-                DSBM_CENSUS(CENSUS_CHAIN_CAP, i);
+                DSBM_CENSUS(CENSUS_CHAIN_CAP, i)
             }
             Accept[i+1] = store_cap[i] + pass;
         }
@@ -355,15 +359,15 @@ int soil_step_one_hour_stateless(
 
                 if (V > max_out) {
                     V = max_out;
-                    DSBM_CENSUS(CENSUS_DOWN_CAP_MAX_OUT, i);
+                    DSBM_CENSUS(CENSUS_DOWN_CAP_MAX_OUT, i)
                 }
                 if (V > donor_avail) {
                     V = donor_avail;
-                    DSBM_CENSUS(CENSUS_DOWN_CAP_DONOR, i);
+                    DSBM_CENSUS(CENSUS_DOWN_CAP_DONOR, i)
                 }
                 if (V > recv_space) {
                     V = recv_space;
-                    DSBM_CENSUS(CENSUS_DOWN_CAP_RECEIVER, i);
+                    DSBM_CENSUS(CENSUS_DOWN_CAP_RECEIVER, i)
                 }
                 if (V < 0.0) V = 0.0;
 
@@ -372,11 +376,11 @@ int soil_step_one_hour_stateless(
 
                 if (theta[i]   < theta_floor) {
                     theta[i]   = theta_floor;
-                    DSBM_CENSUS(CENSUS_TRANSFER_CLAMP, i);
+                    DSBM_CENSUS(CENSUS_TRANSFER_CLAMP, i)
                 }
                 if (theta[i+1] > par->theta_sat) {
                     theta[i+1] = par->theta_sat;
-                    DSBM_CENSUS(CENSUS_TRANSFER_CLAMP, i);
+                    DSBM_CENSUS(CENSUS_TRANSFER_CLAMP, i)
                 }
             }
             else if (V < 0.0) {
@@ -390,11 +394,11 @@ int soil_step_one_hour_stateless(
                 double move = need;
                 if (move > donor_avail) {
                     move = donor_avail;
-                    DSBM_CENSUS(CENSUS_UP_CAP_DONOR, i);
+                    DSBM_CENSUS(CENSUS_UP_CAP_DONOR, i)
                 }
                 if (move > recv_space) {
                     move = recv_space;
-                    DSBM_CENSUS(CENSUS_UP_CAP_RECEIVER, i);
+                    DSBM_CENSUS(CENSUS_UP_CAP_RECEIVER, i)
                 }
 
                 V = -move;
@@ -404,11 +408,11 @@ int soil_step_one_hour_stateless(
 
                 if (theta[i+1] < theta_floor) {
                     theta[i+1] = theta_floor;
-                    DSBM_CENSUS(CENSUS_TRANSFER_CLAMP, i);
+                    DSBM_CENSUS(CENSUS_TRANSFER_CLAMP, i)
                 }
                 if (theta[i] > par->theta_sat) {
                     theta[i] = par->theta_sat;
-                    DSBM_CENSUS(CENSUS_TRANSFER_CLAMP, i);
+                    DSBM_CENSUS(CENSUS_TRANSFER_CLAMP, i)
                 }
             }
 
@@ -425,10 +429,10 @@ int soil_step_one_hour_stateless(
             if (avail < 0.0) avail = 0.0;
 
             perc_vol = bottom_potential;
-            DSBM_CENSUS(CENSUS_PERC_ACTIVE, 0);
+            DSBM_CENSUS(CENSUS_PERC_ACTIVE, 0)
             if (perc_vol > avail) {
                 perc_vol = avail;
-                DSBM_CENSUS(CENSUS_PERC_CAPPED, 0);
+                DSBM_CENSUS(CENSUS_PERC_CAPPED, 0)
             }
 
             theta[ndisc-1] -= perc_vol / geom->dz[ndisc-1];
@@ -471,13 +475,13 @@ int soil_step_one_hour_stateless(
             double f_aet;  // fraction of assigned PET realized
             if (th <= par->theta_wp) {
                 f_aet = 0.0;
-                DSBM_CENSUS(CENSUS_ET_DRY, i);
+                DSBM_CENSUS(CENSUS_ET_DRY, i)
             } else if (th >= par->theta_aet_eq_pet) {
                 f_aet = 1.0;
-                DSBM_CENSUS(CENSUS_ET_UNSTRESSED, i);
+                DSBM_CENSUS(CENSUS_ET_UNSTRESSED, i)
             } else {
                 f_aet = (th - par->theta_wp) / denom;
-                DSBM_CENSUS(CENSUS_ET_STRESSED, i);
+                DSBM_CENSUS(CENSUS_ET_STRESSED, i)
             }
 
             double demand = f_aet * pet_sub * root_frac;
@@ -488,7 +492,7 @@ int soil_step_one_hour_stateless(
             double AET_i = demand;
             if (AET_i > avail) {
                 AET_i = avail;
-                DSBM_CENSUS(CENSUS_ET_CAPPED, i);
+                DSBM_CENSUS(CENSUS_ET_CAPPED, i)
             }
 
             theta[i] -= AET_i / geom->dz[i];
@@ -509,11 +513,13 @@ int soil_step_one_hour_stateless(
         // storage cap needed, no zero-gradient region for calibration).
         // ctrl->lateral_scheme = LATERAL_SCHEME_FORWARD_EULER restores the
         // legacy explicit step.
+#ifdef DSBM_CENSUS_BUILD
         for (int i = 0; i < ndisc; i++) {
             if (par->klf_m_per_h > 0.0 && theta[i] > par->theta_fc) {
-                DSBM_CENSUS(CENSUS_LAT_ACTIVE, i);
+                DSBM_CENSUS(CENSUS_LAT_ACTIVE, i)
             }
         }
+#endif
         if (par->klf_m_per_h > 0.0 && any_disc_above(theta, par->theta_fc, ndisc)) {
             double lat_removed;
             if (ctrl->lateral_scheme == LATERAL_SCHEME_FORWARD_EULER) {
@@ -538,11 +544,11 @@ int soil_step_one_hour_stateless(
         for (int i = 0; i < ndisc; i++) {
             if (theta[i] < theta_floor) {
                 theta[i] = theta_floor;
-                DSBM_CENSUS(CENSUS_SAFETY_CLAMP, i);
+                DSBM_CENSUS(CENSUS_SAFETY_CLAMP, i)
             }
             if (theta[i] > par->theta_sat) {
                 theta[i] = par->theta_sat;
-                DSBM_CENSUS(CENSUS_SAFETY_CLAMP, i);
+                DSBM_CENSUS(CENSUS_SAFETY_CLAMP, i)
             }
         }
     } // end substeps
@@ -558,10 +564,10 @@ int soil_step_one_hour_stateless(
 #ifdef DSBM_CENSUS_BUILD
     // census only: threshold crossings over the timestep
     for (int i = 0; i < NDISC; i++) {
-        if (sin->theta_in[i] > par->theta_fc && theta[i] <= par->theta_fc) DSBM_CENSUS(CENSUS_FC_CROSS_DOWN, i);
-        if (sin->theta_in[i] <= par->theta_fc && theta[i] > par->theta_fc) DSBM_CENSUS(CENSUS_FC_CROSS_UP, i);
-        if (sin->theta_in[i] > par->theta_wp && theta[i] <= par->theta_wp) DSBM_CENSUS(CENSUS_WP_CROSS_DOWN, i);
-        if (sin->theta_in[i] <= par->theta_wp && theta[i] > par->theta_wp) DSBM_CENSUS(CENSUS_WP_CROSS_UP, i);
+        if (sin->theta_in[i] > par->theta_fc && theta[i] <= par->theta_fc) DSBM_CENSUS(CENSUS_FC_CROSS_DOWN, i)
+        if (sin->theta_in[i] <= par->theta_fc && theta[i] > par->theta_fc) DSBM_CENSUS(CENSUS_FC_CROSS_UP, i)
+        if (sin->theta_in[i] > par->theta_wp && theta[i] <= par->theta_wp) DSBM_CENSUS(CENSUS_WP_CROSS_DOWN, i)
+        if (sin->theta_in[i] <= par->theta_wp && theta[i] > par->theta_wp) DSBM_CENSUS(CENSUS_WP_CROSS_UP, i)
     }
 #endif
 
