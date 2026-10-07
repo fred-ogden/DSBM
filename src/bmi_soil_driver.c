@@ -107,11 +107,14 @@ static void usage(const char *prog)
         "  --config <file>                Soil parameter configuration file.\n"
         "  --solver <dsbm|noahmp>          Soil solver (default dsbm).\n"
         "  --apply-fc-perc-threshold       Restrict bottom drainage to water above theta_fc.\n"
-        "  --n-sub-fixed <int>            DSBM: use this fixed substep count instead of\n"
-        "                                 the adaptive choice (default 0 = adaptive).\n"
-        "  --n-sub-minimum <int>          DSBM: floor on the adaptive substep count.\n"
-        "  --substep-lateral-severity     DSBM: adaptive substep count also limits the\n"
-        "                                 lateral removal fraction per substep.\n"
+        "  --nsub <int>                   DSBM substeps per timestep: N > 0 fixes the\n"
+        "                                 count at N; 0 selects the original adaptive\n"
+        "                                 choice.  Default: fixed at 4.\n"
+        "  --n-sub-minimum <int>          DSBM, with --nsub 0: floor on the adaptive\n"
+        "                                 substep count.\n"
+        "  --substep-lateral-severity     DSBM, with --nsub 0: adaptive substep count\n"
+        "                                 also limits the lateral removal fraction per\n"
+        "                                 substep.\n"
         "  --lateral-forward-euler        DSBM: use the legacy forward-Euler lateral\n"
         "                                 removal instead of the default exact\n"
         "                                 exponential solution within each substep.\n"
@@ -253,9 +256,10 @@ int parse_args(int argc, char **argv, DriverOpts *o)
             o->solver[sizeof(o->solver)-1] = '\0';
         } else if (!strcmp(a, "--apply-fc-perc-threshold")) {
             o->apply_fc_perc_threshold = 1;
-        } else if (!strcmp(a, "--n-sub-fixed") && i+1 < argc) {
-            if (parse_int(argv[++i], &o->n_sub_fixed)) return -1;
-            if (o->n_sub_fixed < 0) return -1;
+        } else if (!strcmp(a, "--nsub") && i+1 < argc) {
+            if (parse_int(argv[++i], &o->nsub)) return -1;
+            if (o->nsub < 0) return -1;
+            o->have_nsub = 1;
         } else if (!strcmp(a, "--n-sub-minimum") && i+1 < argc) {
             if (parse_int(argv[++i], &o->n_sub_minimum)) return -1;
             if (o->n_sub_minimum < 0) return -1;
@@ -443,7 +447,7 @@ static void default_control(SoilControl *ctrl)
     ctrl->deepest_root_disc = NDISC; // all discs in root zone by default
     ctrl->use_ch_lookup_table = 0;   // analytic by default
     ctrl->apply_fc_perc_threshold = 0; // native free drainage unless requested
-    ctrl->n_sub_fixed = 0;             // adaptive DSBM substeps unless requested
+    ctrl->n_sub_setting = N_SUB_SETTING_DEFAULT; // fixed 4 substeps unless --nsub given
     ctrl->n_sub_minimum = 0;           // no floor on adaptive substeps unless requested
     ctrl->substep_lateral_severity = 0;// adaptive substeps ignore lateral rate unless requested
     ctrl->lateral_scheme = LATERAL_SCHEME_EXPONENTIAL; // unless --lateral-forward-euler
@@ -574,7 +578,13 @@ int main(int argc, char **argv)
 
     ctrl.use_ch_lookup_table = opt.use_lut ? 1 : 0;
     ctrl.apply_fc_perc_threshold = opt.apply_fc_perc_threshold ? 1 : 0;
-    ctrl.n_sub_fixed = opt.n_sub_fixed;
+    if (opt.have_nsub) {
+        if (opt.nsub == 0) {
+            ctrl.n_sub_setting = N_SUB_SETTING_ADAPTIVE;
+        } else {
+            ctrl.n_sub_setting = opt.nsub;
+        }
+    }
     ctrl.n_sub_minimum = opt.n_sub_minimum;
     ctrl.substep_lateral_severity = opt.substep_lateral_severity;
     ctrl.lateral_scheme = opt.lateral_scheme;

@@ -35,15 +35,22 @@ extern "C" {
 #define LATERAL_SCHEME_EXPONENTIAL    0   // exact linear-reservoir solution
 #define LATERAL_SCHEME_FORWARD_EULER  1   // legacy explicit step with storage cap
 
+// Substeps per timestep.  The zero value of n_sub_setting selects the
+// default fixed count, so a zero-initialized SoilControl gets it.
+#define N_SUB_DEFAULT_COUNT       4   // default fixed substeps per timestep
+#define N_SUB_SETTING_DEFAULT     0   // use N_SUB_DEFAULT_COUNT
+#define N_SUB_SETTING_ADAPTIVE   (-1) // original adaptive substep choice
+
 typedef struct {
     int    ndisc;                 // must equal NDISC
     int    deepest_root_disc;     // 1..ndisc
     int    use_ch_lookup_table;   // 1 => use LUT; 0 => analytic CH
     int    apply_fc_perc_threshold; // 1 => bottom drainage only above theta_fc
-    int    n_sub_fixed;           // 0 => adaptive n_sub (default); >0 => fixed substep count
-    int    n_sub_minimum;         // 0 => no floor (default); >0 => adaptive n_sub is at least this
-    int    substep_lateral_severity; // 0 => adaptive n_sub ignores lateral flow (default);
-                                  // 1 => adaptive n_sub also considers lateral removal rate
+    int    n_sub_setting;         // N_SUB_SETTING_DEFAULT (0): fixed N_SUB_DEFAULT_COUNT;
+                                  // N_SUB_SETTING_ADAPTIVE (-1): original adaptive choice;
+                                  // >0: fixed at that many substeps per timestep
+    int    n_sub_minimum;         // adaptive only: 0 => no floor; >0 => n_sub is at least this
+    int    substep_lateral_severity; // adaptive only: 1 => also consider lateral removal rate
     int    lateral_scheme;        // LATERAL_SCHEME_EXPONENTIAL (0, default) or
                                   // LATERAL_SCHEME_FORWARD_EULER (1)
     double dt_hours;              // usually 1.0

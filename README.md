@@ -403,12 +403,23 @@ above theta_fc, can be selected with:
 --lateral-forward-euler
 ```
 
-For time-discretization experiments the adaptive DSBM substep count can
-be replaced by a fixed count:
+## Substeps per timestep
+
+By default DSBM uses a fixed 4 substeps per hourly timestep.  A fixed
+count keeps outputs, and their derivatives with respect to calibration
+parameters, free of the jumps that occur when a parameter change moves a
+timestep across one of the adaptive scheme's severity thresholds.  The
+count can be changed with:
 
 ``` text
---n-sub-fixed 12
+--nsub N      fixed at N substeps per timestep (N > 0)
+--nsub 0      original adaptive choice (1 to 12 substeps per timestep,
+              from the Darcy-Buckingham fluxes and rain rate)
 ```
+
+With `--nsub 0`, `--n-sub-minimum N` sets a floor on the adaptive count.
+The total number of substeps and the wall-clock time are reported in
+`volbal_summary.out`.
 
 ## Numerical comparison objective
 

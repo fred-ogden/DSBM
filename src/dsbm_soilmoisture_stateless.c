@@ -189,11 +189,15 @@ int soil_step_one_hour_stateless(
                              sin->psi_in[i+1], sin->K_in[i+1],
                              geom->dz[i], geom->dz[i+1]);
     }
-    // Adaptive substep count by default.  A positive ctrl->n_sub_fixed
-    // overrides it (used to test how adaptive time discretization
-    // affects derivatives with respect to calibration parameters).
+    // Substeps per timestep (ctrl->n_sub_setting):
+    //   N_SUB_SETTING_DEFAULT (0): fixed at N_SUB_DEFAULT_COUNT (4).  A
+    //     fixed count avoids the jumps in outputs and derivatives that the
+    //     adaptive choice causes when a calibration parameter moves a
+    //     timestep across a severity threshold (Tapenade experiments E5-E7).
+    //   N_SUB_SETTING_ADAPTIVE (-1): the original adaptive choice below.
+    //   > 0: fixed at that count.
     //
-    // Optional refinements of the adaptive choice (both off by default):
+    // Optional refinements of the adaptive choice only (both off by default):
     //   ctrl->substep_lateral_severity: also require that the lateral
     //     linear reservoir removes no more than
     //     LATERAL_SEVERITY_FRACTION_PER_SUBSTEP of a disc's moisture above
@@ -215,8 +219,10 @@ int soil_step_one_hour_stateless(
     }
 
     int n_sub;
-    if (ctrl->n_sub_fixed > 0) {
-        n_sub = ctrl->n_sub_fixed;
+    if (ctrl->n_sub_setting > 0) {
+        n_sub = ctrl->n_sub_setting;
+    } else if (ctrl->n_sub_setting == N_SUB_SETTING_DEFAULT) {
+        n_sub = N_SUB_DEFAULT_COUNT;
     } else {
         n_sub = choose_n_sub_generic(dtH, forcing->rain_mm_per_h,
                                      geom->dz, theta, par->theta_sat, q0, ndisc,
@@ -427,7 +433,12 @@ int soil_step_one_hour_stateless(
             if (AET_i > avail) AET_i = avail;
 
             theta[i] -= AET_i / geom->dz[i];
-            if (theta[i] < par->theta_wp) theta[i] = par->theta_wp;
+            // Roundoff guard only.  AET_i <= avail keeps theta at or above
+            // theta_wp when the disc started above it.  A disc that entered
+            // ET already below theta_wp (drained there by Darcy-Buckingham
+            // flow) has AET_i = 0 and must stay where it is: raising it to
+            // theta_wp would create soil moisture with no matching flux.
+            if (th > par->theta_wp && theta[i] < par->theta_wp) theta[i] = par->theta_wp;
 
             et_this_sub            += AET_i;
             flux->AET_by_disc_m[i] += AET_i;

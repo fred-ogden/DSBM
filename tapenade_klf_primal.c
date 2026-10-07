@@ -178,7 +178,11 @@ void dsbm_lateral_from_klf(double klf_m_per_h,
     ctrl.use_ch_lookup_table = 0;
     ctrl.apply_fc_perc_threshold = 0;
     ctrl.dt_hours = 1.0;
-    ctrl.n_sub_fixed = n_sub_fixed;
+    /* wrapper argument keeps its original meaning: 0 = adaptive, >0 = fixed */
+    ctrl.n_sub_setting = n_sub_fixed;
+    if (n_sub_fixed <= 0) {
+        ctrl.n_sub_setting = N_SUB_SETTING_ADAPTIVE;
+    }
     ctrl.n_sub_minimum = n_sub_minimum;
     ctrl.substep_lateral_severity = lateral_substep_severity;
     /* wrapper argument keeps its original meaning: 1 = exponential */

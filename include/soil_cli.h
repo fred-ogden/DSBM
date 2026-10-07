@@ -49,7 +49,8 @@ typedef struct {
 
     char solver[16];          /* dsbm or noahmp */
     int  apply_fc_perc_threshold; /* apply theta_fc threshold to bottom drainage */
-    int  n_sub_fixed;             /* DSBM: 0 = adaptive substeps, >0 = fixed count */
+    int  have_nsub;               /* DSBM: 1 if --nsub was given */
+    int  nsub;                    /* DSBM: --nsub value: 0 = adaptive, >0 = fixed count */
     int  n_sub_minimum;           /* DSBM: floor on adaptive substeps (0 = none) */
     int  substep_lateral_severity;/* DSBM: 1 = adaptive substeps consider lateral rate */
     int  lateral_scheme;          /* DSBM: LATERAL_SCHEME_EXPONENTIAL (default) or
