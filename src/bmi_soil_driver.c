@@ -324,12 +324,19 @@ int parse_args(int argc, char **argv, DriverOpts *o)
 
 // ---------------------- Parameters & geometry ----------------------
 
+// Capillary pressure at the wilting point, in atmospheres (CFE3.1 value).
+#define WILTING_POINT_PCAP_OVER_PATM 15.0
+
 typedef struct {
     int have_soil_depth_m;
     double soil_depth_m;
     int calculate_phi_sat_from_ksat;
     int have_field_capacity_pressure_ratio;
     double field_capacity_pressure_ratio;
+    int have_wilting_point_pressure_ratio;      // soil_wilting_point_Pcap_over_Patm given
+    double wilting_point_pressure_ratio;        // capillary pressure / atmospheric pressure (-)
+    int have_wilting_point_moisture_content;    // soil_wilting_point_m3_per_m3 given
+    double wilting_point_moisture_content;      // theta_wp set directly (m3/m3)
     int have_initial_storage_m;
     double initial_storage_m;
 } SoilConfigOptions;
@@ -394,6 +401,12 @@ static int load_config_file(const char *path, SoilParameters *par, SoilConfigOpt
         } else if (!strcmp(key, "soil_field_capacity_Pcap_over_Patm_0_1")) {
             config->field_capacity_pressure_ratio = val;
             config->have_field_capacity_pressure_ratio = 1;
+        } else if (!strcmp(key, "soil_wilting_point_Pcap_over_Patm")) {
+            config->wilting_point_pressure_ratio = val;
+            config->have_wilting_point_pressure_ratio = 1;
+        } else if (!strcmp(key, "soil_wilting_point_m3_per_m3")) {
+            config->wilting_point_moisture_content = val;
+            config->have_wilting_point_moisture_content = 1;
         } else if (!strcmp(key, "soil_reservoir_rate_const_to_subsurface_lateral_flow")) {
             par->klf_m_per_h = val;
         } else if (!strcmp(key, "soil_to_gw_percolation_rate_limiter_0_to_1")) {
@@ -421,6 +434,39 @@ static int load_config_file(const char *path, SoilParameters *par, SoilConfigOpt
                       : par->theta_sat *
                         pow(par->phi_sat_cm / field_capacity_head_cm, 1.0 / par->b_exp);
         par->theta_aet_eq_pet = par->theta_fc;
+    }
+
+    /*
+     * Wilting point, as in CFE3.1 (cfe_helpers.c): the Clapp-Hornberger
+     * soil moisture at a capillary pressure of WILTING_POINT_PCAP_OVER_PATM
+     * (15) atmospheres,
+     *
+     *   theta_wp = theta_sat * (wilting_point_head / phi_sat)^(-1/b).
+     *
+     * soil_wilting_point_Pcap_over_Patm changes the pressure ratio, and
+     * soil_wilting_point_m3_per_m3 sets theta_wp directly (it overrides
+     * the calculation; 0.10 reproduces runs made before the wilting point
+     * was calculated).  If the wilting-point head is at or below phi_sat
+     * the soil is saturated there, so theta_wp = theta_sat (the same rule
+     * as for theta_fc).
+     */
+    if (config->have_wilting_point_moisture_content) {
+        par->theta_wp = config->wilting_point_moisture_content;
+    } else {
+        const double atmospheric_pressure_head_cm = 1033.2274528;
+        double wilting_point_pressure_ratio = WILTING_POINT_PCAP_OVER_PATM;
+        double wilting_point_head_cm;
+
+        if (config->have_wilting_point_pressure_ratio) {
+            wilting_point_pressure_ratio = config->wilting_point_pressure_ratio;
+        }
+        wilting_point_head_cm = wilting_point_pressure_ratio * atmospheric_pressure_head_cm;
+        if (wilting_point_head_cm <= par->phi_sat_cm) {
+            par->theta_wp = par->theta_sat;
+        } else {
+            par->theta_wp = par->theta_sat *
+                            pow(wilting_point_head_cm / par->phi_sat_cm, -1.0 / par->b_exp);
+        }
     }
     return 0;
 }
@@ -594,6 +640,13 @@ int main(int argc, char **argv)
     if (opt.have_config) {
         if (load_config_file(opt.config_path, &par, &config))
             die("failed to read soil config file");
+        if (opt.verbosity > 0) {
+            if (config.have_wilting_point_moisture_content) {
+                fprintf(stdout, "wilting point moisture content (from config) = %.5f\n", par.theta_wp);
+            } else {
+                fprintf(stdout, "calculated wilting point moisture content = %.5f\n", par.theta_wp);
+            }
+        }
     }
 
     fill_geometry_from_opts(&opt, &geom);

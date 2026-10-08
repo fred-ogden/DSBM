@@ -181,8 +181,8 @@ arbitrary soil properties, forcings, initial conditions, climates, or
 numerical configurations.
 
 The comparison figures and summaries in `results/` were produced before
-the current DSBM defaults (fixed 4 substeps, exact exponential lateral
-removal) were adopted. They can be reproduced exactly; see
+the current defaults (fixed 4 DSBM substeps, exact exponential lateral
+removal, computed wilting point) were adopted. They can be reproduced exactly; see
 [Reproducing the original DSBM output](#reproducing-the-original-dsbm-output).
 
 ## Repository layout
@@ -321,22 +321,30 @@ from before those defaults changed, see the next section.
 
 ## Reproducing the original DSBM output
 
-Two DSBM defaults changed during the differentiability work: the
-substep count (fixed at 4, previously adaptive) and the lateral removal
-(exact exponential, previously forward Euler). The original behavior is
-still available. Adding
+Three defaults have changed since commit `1a8d1e2`: the DSBM substep
+count (fixed at 4, previously adaptive), the DSBM lateral removal (exact
+exponential, previously forward Euler), and the wilting point (computed
+at 15 atmospheres, previously fixed at 0.10, for both DSBM and Noah-MP).
+The original behavior is still available.  Add this line to the config
+file:
+
+``` text
+soil_wilting_point_m3_per_m3=0.10[V V-1]
+```
+
+and, for DSBM runs, these options:
 
 ``` text
 --nsub 0 --lateral-forward-euler
 ```
 
-to any DSBM run reproduces the output of the code before these changes
-(commit `1a8d1e2`) byte for byte: theta, flux, and volume-balance time
-series, the summary file apart from its wall-clock time line, and the
-screen output. This has been checked for DSBM with the lookup table and
-with the analytic functions, each with and without
-`--apply-fc-perc-threshold`. Noah-MP output is unchanged and needs no
-options.
+The output then matches the code at commit `1a8d1e2` byte for byte:
+theta, flux, and volume-balance time series, and the summary file apart
+from its wall-clock time line.  The screen output also matches apart
+from one added first line reporting the wilting point.  This has been
+checked for DSBM with the lookup table and with the analytic functions,
+each with and without `--apply-fc-perc-threshold`, and for Noah-MP with
+and without it.
 
 ## Driver examples
 
@@ -436,8 +444,15 @@ Some quantities are derived rather than read:
     (`soil_field_capacity_Pcap_over_Patm_0_1` times atmospheric pressure
     head), and `theta_aet_eq_pet` (the soil moisture at and above which
     AET equals the assigned PET) is set equal to it.
--   The wilting point `theta_wp` (0.10) and residual soil moisture
-    `theta_r` (0) are fixed in the driver.
+-   The wilting point `theta_wp` is the Clapp-Hornberger soil moisture
+    at a capillary pressure of 15 atmospheres, as in CFE3.1:
+    `theta_wp = theta_sat * (15 * psi_atm / phi_sat)^(-1/b)`, which is
+    0.0712 for `configs/soil_params.dat`.  The driver prints it at the
+    start of a run.  Two optional keys change it:
+    `soil_wilting_point_Pcap_over_Patm=<ratio>[P P-1]` changes the
+    pressure ratio, and `soil_wilting_point_m3_per_m3=<value>[V V-1]`
+    sets theta_wp directly, overriding the calculation.
+-   The residual soil moisture `theta_r` is fixed at 0 in the driver.
 
 These are properties or parameters of the **uniform soil column**. The
 current DSBM formulation does not assign an independent set of hydraulic
@@ -500,19 +515,20 @@ are reported in `volbal_summary.out`.
 
 | `--nsub`   | substeps per hour | lateral (m) | percolation (m) | AET (m) |
 |------------|------------------:|------------:|----------------:|--------:|
-| 0 adaptive |              1.18 |      0.5372 |          6.3368 |  4.0148 |
-| 1          |              1    |      0.5341 |          6.2159 |  3.9954 |
-| 2          |              2    |      0.5373 |          6.3185 |  4.0148 |
-| 4 default  |              4    |      0.5384 |          6.3317 |  4.0148 |
-| 12         |             12    |      0.5389 |          6.3342 |  4.0148 |
-| 24         |             24    |      0.5391 |          6.3344 |  4.0148 |
+| 0 adaptive |              1.18 |      0.5372 |          6.3367 |  4.0149 |
+| 1          |              1    |      0.5340 |          6.2145 |  3.9968 |
+| 2          |              2    |      0.5373 |          6.3184 |  4.0149 |
+| 4 default  |              4    |      0.5384 |          6.3316 |  4.0149 |
+| 12         |             12    |      0.5389 |          6.3341 |  4.0149 |
+| 24         |             24    |      0.5391 |          6.3343 |  4.0149 |
 
 With 4 substeps, percolation is within 0.05% and lateral flow within
 0.15% of the 24-substep values.  A single substep per hour is not
 recommended: on this record it gives about 2% less percolation and
 0.5% less AET than the finer settings.  Run time grows much more slowly
-than the substep count (about 0.19 s for 1 substep per hour, 0.27 s for
-4, and 0.84 s for 24, for the whole record on one workstation).
+than the substep count (roughly 0.2 s for 1 substep per hour, 0.3 s for
+4, and 0.8 s for 24, for the whole record on one workstation; timings
+vary from run to run).
 
 ## Branch-activity census
 
