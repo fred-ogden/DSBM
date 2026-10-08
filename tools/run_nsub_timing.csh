@@ -9,9 +9,9 @@
 #   --nsub 0   original adaptive substep choice
 #   --nsub N   fixed at N substeps per timestep (default is 4)
 #
-# Usage, from the repository root:
-#     ./run_nsub_timing.csh                 (default list: 0 1 2 4 6 8 12 24)
-#     ./run_nsub_timing.csh 0 4 12          (any list of settings)
+# Usage, from the repository root (or from tools/ as ./run_nsub_timing.csh):
+#     tools/run_nsub_timing.csh                 (default list: 0 1 2 4 6 8 12 24)
+#     tools/run_nsub_timing.csh 0 4 12          (any list of settings)
 #
 # Each run writes to output/nsub_<N>/.  The table is also saved to
 # output/nsub_timing.txt.  Wall-clock time is as reported by soil_driver
@@ -20,6 +20,16 @@
 # ASCII only.
 
 set nonomatch
+
+# Work from the repository root, wherever this script is started from:
+# this script lives in tools/, 1 level below the root.
+set script_dir = $0:h
+if ( "$script_dir" == "$0" ) set script_dir = .
+cd $script_dir/..
+if ( ! -f Makefile || ! -d src || ! -d include ) then
+    echo "ERROR: could not find the repository root from $0"
+    exit 1
+endif
 set settings = ( 0 1 2 4 6 8 12 24 )
 if ( $#argv > 0 ) set settings = ( $argv )
 

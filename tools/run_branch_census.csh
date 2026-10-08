@@ -13,16 +13,26 @@
 # of the config with only k_lf replaced; all other parameters are as in
 # configs/soil_params.dat (including perc_limiter = 0.81).
 #
-# Usage, from the repository root:
-#     ./run_branch_census.csh                      (k_lf = config, 1e-3, 1e-2)
-#     ./run_branch_census.csh 1e-3                 (any list of k_lf values)
-#     ./run_branch_census.csh --nsub 0 1e-3        (extra soil_driver options first)
+# Usage, from the repository root (or from tools/ as ./run_branch_census.csh):
+#     tools/run_branch_census.csh                      (k_lf = config, 1e-3, 1e-2)
+#     tools/run_branch_census.csh 1e-3                 (any list of k_lf values)
+#     tools/run_branch_census.csh --nsub 0 1e-3        (extra soil_driver options first)
 #
 # Output: output/census/census_klf_<value>.txt for each k_lf.
 #
 # ASCII only.
 
 set nonomatch
+
+# Work from the repository root, wherever this script is started from:
+# this script lives in tools/, 1 level below the root.
+set script_dir = $0:h
+if ( "$script_dir" == "$0" ) set script_dir = .
+cd $script_dir/..
+if ( ! -f Makefile || ! -d src || ! -d include ) then
+    echo "ERROR: could not find the repository root from $0"
+    exit 1
+endif
 set driver_options = ( )
 set klf_values = ( )
 

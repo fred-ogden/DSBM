@@ -9,9 +9,9 @@
 #   E9a adjoint versus tangent and dot-product test, E9b run time,
 #   E9c adjoint memory, E9d BFGS calibration with each gradient.
 #
-# Usage, from the repository root:
-#     ./run_tapenade_adjoint.csh            (E9a-E9d)
-#     ./run_tapenade_adjoint.csh ab         (any letter string)
+# Usage, from the repository root (or from tapenade/cost/ as ./run_tapenade_adjoint.csh):
+#     tapenade/cost/run_tapenade_adjoint.csh            (E9a-E9d)
+#     tapenade/cost/run_tapenade_adjoint.csh ab         (any letter string)
 #
 # Steps:
 #   1. clean rebuild of the production library
@@ -30,6 +30,17 @@
 # both ignored by git.  ASCII only.
 
 set nonomatch
+
+# Work from the repository root, wherever this script is started from:
+# this script lives in tapenade/cost/, 2 levels below the root.
+set script_dir = $0:h
+if ( "$script_dir" == "$0" ) set script_dir = .
+cd $script_dir/../..
+if ( ! -f Makefile || ! -d src || ! -d include ) then
+    echo "ERROR: could not find the repository root from $0"
+    exit 1
+endif
+set experiment_dir = tapenade/cost
 set experiments = abcd
 if ( $#argv > 0 ) set experiments = "$1"
 set ndisc = 4
@@ -38,7 +49,7 @@ set work_dir = tapenade_input/adjoint
 set gen_d = $work_dir/generated_d
 set gen_b = $work_dir/generated_b
 set results_dir = output/tapenade_adjoint
-set exe = tapenade_adjoint_test
+set exe = bin/tapenade_adjoint_test
 set head_function = dsbm_cost_from_params
 set head_spec = "dsbm_cost_from_params(cost_function_value)/(klf_m_per_h perc_limiter_0_to_1)"
 set sources = "tapenade_cost_primal.c dsbm_soilmoisture_stateless.c soil_helpers.c"
@@ -67,7 +78,7 @@ rm -rf $work_dir
 mkdir -p $gen_d $gen_b
 cp include/*.h $work_dir/
 ( echo "#define NDISC $ndisc" ; cat include/soil_config.h ) >! $work_dir/soil_config.h
-foreach source_file ( tapenade_cost_primal.c src/dsbm_soilmoisture_stateless.c src/soil_helpers.c )
+foreach source_file ( $experiment_dir/tapenade_cost_primal.c src/dsbm_soilmoisture_stateless.c src/soil_helpers.c )
     ( echo "#define NDISC $ndisc" ; cat $source_file ) >! $work_dir/$source_file:t
 end
 
@@ -153,21 +164,21 @@ if ( $status != 0 ) then
 endif
 
 cc $cflags $tangent_flag -I$gen_d -I$work_dir -I$kit_dir \
-    -c tapenade_cost_tangent_adapter.c -o $work_dir/tangent_adapter.o
+    -c $experiment_dir/tapenade_cost_tangent_adapter.c -o $work_dir/tangent_adapter.o
 if ( $status != 0 ) then
     echo "ERROR: compiling the tangent adapter failed"
     exit 1
 endif
 cc $cflags $adjoint_flag -I$gen_b -I$work_dir -I$kit_dir \
-    -c tapenade_cost_adjoint_adapter.c -o $work_dir/adjoint_adapter.o
+    -c $experiment_dir/tapenade_cost_adjoint_adapter.c -o $work_dir/adjoint_adapter.o
 if ( $status != 0 ) then
     echo "ERROR: compiling the adjoint adapter failed (generated signature differs from expected)"
     exit 1
 endif
 
-cc $cflags -Iinclude -c tapenade_cost_primal.c -o $work_dir/tapenade_cost_primal.o
+cc $cflags -Iinclude -c $experiment_dir/tapenade_cost_primal.c -o $work_dir/tapenade_cost_primal.o
 if ( $status != 0 ) exit 1
-cc $cflags -Iinclude -c tapenade_adjoint_driver.c -o $work_dir/tapenade_adjoint_driver.o
+cc $cflags -Iinclude -c $experiment_dir/tapenade_adjoint_driver.c -o $work_dir/tapenade_adjoint_driver.o
 if ( $status != 0 ) exit 1
 
 cc -o $exe $work_dir/tapenade_adjoint_driver.o $work_dir/tapenade_cost_primal.o \
@@ -182,6 +193,6 @@ echo ""
 echo "==== 6. running experiments"
 rm -rf $results_dir
 mkdir -p $results_dir
-./$exe $results_dir forcing/rain_pet_example.csv $experiments | tee $results_dir/results.txt
+$exe $results_dir forcing/rain_pet_example.csv $experiments | tee $results_dir/results.txt
 echo ""
 echo "Results: $results_dir/results.txt"

@@ -8,9 +8,9 @@
 # respect to k_lf and perc_limiter.
 #   E8a gradient check, E8b one-parameter sweeps, E8c BFGS calibration.
 #
-# Usage, from the repository root:
-#     ./run_tapenade_cost.csh           (E8a, E8b, E8c)
-#     ./run_tapenade_cost.csh c         (E8c only; any letter string works)
+# Usage, from the repository root (or from tapenade/cost/ as ./run_tapenade_cost.csh):
+#     tapenade/cost/run_tapenade_cost.csh           (E8a, E8b, E8c)
+#     tapenade/cost/run_tapenade_cost.csh c         (E8c only; any letter string works)
 #
 # Steps:
 #   1. build the production library (make)
@@ -27,6 +27,17 @@
 # by git.  ASCII only.
 
 set nonomatch
+
+# Work from the repository root, wherever this script is started from:
+# this script lives in tapenade/cost/, 2 levels below the root.
+set script_dir = $0:h
+if ( "$script_dir" == "$0" ) set script_dir = .
+cd $script_dir/../..
+if ( ! -f Makefile || ! -d src || ! -d include ) then
+    echo "ERROR: could not find the repository root from $0"
+    exit 1
+endif
+set experiment_dir = tapenade/cost
 set experiments = abc
 if ( $#argv > 0 ) set experiments = "$1"
 set ndisc = 4
@@ -34,7 +45,7 @@ set theta_min = 1.0e-03
 set work_dir = tapenade_input/cost
 set gen_dir = $work_dir/generated
 set results_dir = output/tapenade_cost
-set exe = tapenade_cost_derivative_test
+set exe = bin/tapenade_cost_derivative_test
 set head_function = dsbm_cost_from_params
 set dependents = "cost_function_value"
 set independents = "klf_m_per_h perc_limiter_0_to_1"
@@ -65,7 +76,7 @@ cp include/*.h $work_dir/
 ( echo "#define NDISC $ndisc" ; cat include/soil_config.h ) >! $work_dir/soil_config.h
 # soil_helpers.c tests NDISC on its first lines, before any #include,
 # so the definition must be at the top of each copied source file too.
-foreach source_file ( tapenade_cost_primal.c src/dsbm_soilmoisture_stateless.c src/soil_helpers.c )
+foreach source_file ( $experiment_dir/tapenade_cost_primal.c src/dsbm_soilmoisture_stateless.c src/soil_helpers.c )
     ( echo "#define NDISC $ndisc" ; cat $source_file ) >! $work_dir/$source_file:t
 end
 
@@ -148,15 +159,15 @@ foreach gen_c ( $gen_dir/*_d.c )
 end
 
 cc $cflags $nsub_slot_flag -I$gen_dir -I$work_dir $tapenade_kit_flags \
-    -c tapenade_cost_tangent_adapter.c -o $gen_dir/tapenade_cost_tangent_adapter.o
+    -c $experiment_dir/tapenade_cost_tangent_adapter.c -o $gen_dir/tapenade_cost_tangent_adapter.o
 if ( $status != 0 ) then
     echo "ERROR: compiling the tangent adapter failed (generated signature differs from expected)"
     exit 1
 endif
 
-cc $cflags -Iinclude -c tapenade_cost_primal.c -o $gen_dir/tapenade_cost_primal.o
+cc $cflags -Iinclude -c $experiment_dir/tapenade_cost_primal.c -o $gen_dir/tapenade_cost_primal.o
 if ( $status != 0 ) exit 1
-cc $cflags -Iinclude -c tapenade_cost_driver.c -o $gen_dir/tapenade_cost_driver.o
+cc $cflags -Iinclude -c $experiment_dir/tapenade_cost_driver.c -o $gen_dir/tapenade_cost_driver.o
 if ( $status != 0 ) exit 1
 
 set link_objects = "$gen_dir/tapenade_cost_driver.o $gen_dir/tapenade_cost_primal.o $gen_dir/tapenade_cost_tangent_adapter.o $objects"
@@ -176,7 +187,7 @@ echo ""
 echo "==== 6. running experiments"
 rm -rf $results_dir
 mkdir -p $results_dir
-./$exe $results_dir forcing/rain_pet_example.csv $experiments | tee $results_dir/results.txt
+$exe $results_dir forcing/rain_pet_example.csv $experiments | tee $results_dir/results.txt
 set run_status = $status
 
 echo ""
