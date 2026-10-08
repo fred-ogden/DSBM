@@ -117,8 +117,10 @@ if ( "$count" != "0" ) set tangent_flag = "-DCOST_TANGENT_HAS_NSUB_SLOT"
 
 set adjoint_flag = ""
 # count matches in the pipeline; never capture the prototype text itself
-# (its trailing brace breaks tcsh word parsing)
-set count_ptr = `grep -A12 "void ${head_function}_b *(" $gen_b/tapenade_cost_primal_b.c | sed -n '1,/)/p' | grep -c "int \*n_sub_settingb"`
+# (its trailing brace breaks tcsh word parsing).  Tapenade wraps long
+# prototypes, and may break "int *" and "n_sub_settingb" across lines,
+# so join the prototype onto one line before testing for the pointer.
+set count_ptr = `grep -A12 "void ${head_function}_b *(" $gen_b/tapenade_cost_primal_b.c | sed -n '1,/)/p' | tr '\n' ' ' | grep -c 'int [*] *n_sub_settingb'`
 set count_any = `grep -A12 "void ${head_function}_b *(" $gen_b/tapenade_cost_primal_b.c | sed -n '1,/)/p' | grep -c "n_sub_settingb"`
 if ( "$count_ptr" != "0" ) then
     set adjoint_flag = "-DCOST_ADJOINT_NSUB_SLOT_BY_POINTER"
