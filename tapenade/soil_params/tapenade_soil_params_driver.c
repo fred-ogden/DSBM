@@ -7,13 +7,15 @@
  *
  * phi_sat is computed from Ksat inside the differentiated code with the
  * CFE3.1 regression phi_sat(cm) = 10.415 Ksat(cm/h)^(-0.3266), and theta_fc
- * (= theta_aet_eq_pet) from phi_sat and b, so both move with the
- * parameters.  See tapenade_soil_cost_primal.c.
+ * (= theta_aet_eq_pet) and the wilting point theta_wp (at 15 atmospheres)
+ * from phi_sat and b, so all of them move with the parameters.  See
+ * tapenade_soil_cost_primal.c.
  *
  * TWIN EXPERIMENT: the "observations" are DSBM's own hourly lateral flow
  * and percolation at the true parameters, so these experiments test the
  * derivative machinery (Tapenade tangent and adjoint through the
- * Ksat -> phi_sat -> theta_fc chain and the moving thresholds), not
+ * Ksat -> phi_sat -> theta_fc, theta_wp chain and the moving
+ * thresholds), not
  * whether the parameters are identifiable from discharge at a gauge.
  *
  *   E10a  Adjoint gradient against tangent gradient (four tangent runs)
@@ -54,6 +56,7 @@
 
 double soil_cost_phi_sat_cm_from_ksat(double K_sat_cm_per_h);
 double soil_cost_theta_fc(double theta_sat, double phi_sat_cm, double b_exp);
+double soil_cost_theta_wp(double theta_sat, double phi_sat_cm, double b_exp);
 
 void dsbm_soil_cost_from_params(double klf_m_per_h,
                                 double perc_limiter_0_to_1,
@@ -344,9 +347,10 @@ static void print_derived_soil(const char *label, const double p[N_PARAMETERS])
 {
     double phi_sat_cm = soil_cost_phi_sat_cm_from_ksat(p[2]);
     double theta_fc = soil_cost_theta_fc(SOIL_THETA_SAT, phi_sat_cm, p[3]);
+    double theta_wp = soil_cost_theta_wp(SOIL_THETA_SAT, phi_sat_cm, p[3]);
 
-    printf("%s Ksat = %.4f cm/h, b = %.3f  ->  phi_sat = %.3f cm, theta_fc = %.4f\n",
-           label, p[2], p[3], phi_sat_cm, theta_fc);
+    printf("%s Ksat = %.4f cm/h, b = %.3f  ->  phi_sat = %.3f cm, theta_fc = %.4f, theta_wp = %.4f\n",
+           label, p[2], p[3], phi_sat_cm, theta_fc, theta_wp);
 }
 
 

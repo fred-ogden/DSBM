@@ -25,13 +25,15 @@
  * theta_fc is then computed from phi_sat and b with the Clapp-Hornberger
  * retention curve at the field-capacity pressure head
  * (soil_field_capacity_Pcap_over_Patm_0_1 times atmospheric pressure head),
- * and theta_aet_eq_pet = theta_fc, as in src/bmi_soil_driver.c.  Because
- * both are computed inside the head function, Tapenade carries the whole
- * chain to the gradient:
+ * and theta_aet_eq_pet = theta_fc, as in src/bmi_soil_driver.c.  The
+ * wilting point theta_wp is computed the same way at a capillary pressure
+ * of 15 atmospheres (CFE3.1 WILTING_POINT_PCAP_OVER_PATM; the driver's
+ * default).  Because all of these are computed inside the head function,
+ * Tapenade carries the whole chain to the gradient:
  *
- *   Ksat -> K(theta)                          (direct)
- *   Ksat -> phi_sat -> psi(theta), theta_fc   (through the regression)
- *   b    -> psi(theta), K(theta), theta_fc
+ *   Ksat -> K(theta)                                    (direct)
+ *   Ksat -> phi_sat -> psi(theta), theta_fc, theta_wp   (through the regression)
+ *   b    -> psi(theta), K(theta), theta_fc, theta_wp
  *
  * The cost function is the E8 one: SSE_lateral/SST_lateral +
  * SSE_percolation/SST_percolation (sum of 1 - NSE for hourly lateral flow
@@ -65,8 +67,8 @@
 
 
 #define SOIL_COST_THETA_SAT                 0.439
-#define SOIL_COST_THETA_WP                  0.10
 #define SOIL_COST_FC_PRESSURE_RATIO         0.333
+#define SOIL_COST_WP_PRESSURE_RATIO         15.0    /* CFE3.1 WILTING_POINT_PCAP_OVER_PATM */
 #define SOIL_COST_ATM_PRESSURE_HEAD_CM      1033.2274528
 
 /* Ksat to phi_sat regression (CFE3.1 soil_saturated_capillary_head_calc_from_ksat) */
@@ -110,6 +112,29 @@ double soil_cost_theta_fc(double theta_sat, double phi_sat_cm, double b_exp)
         theta_fc = theta_sat * pow(phi_sat_cm / field_capacity_head_cm, 1.0 / b_exp);
     }
     return theta_fc;
+}
+
+
+/*
+ * Wilting-point soil moisture (m3/m3) from the Clapp-Hornberger retention
+ * curve at a capillary pressure of 15 atmospheres, as in CFE3.1 and
+ * src/bmi_soil_driver.c:  theta_wp = theta_sat (phi_sat / h_wp)^(1/b).
+ * If the wilting-point head is at or below phi_sat, theta_wp = theta_sat
+ * (does not arise for any realistic phi_sat: h_wp is about 15500 cm).
+ */
+double soil_cost_theta_wp(double theta_sat, double phi_sat_cm, double b_exp)
+{
+    double wilting_point_head_cm;
+    double theta_wp;
+
+    wilting_point_head_cm = SOIL_COST_WP_PRESSURE_RATIO * SOIL_COST_ATM_PRESSURE_HEAD_CM;
+
+    if (wilting_point_head_cm <= phi_sat_cm) {
+        theta_wp = theta_sat;
+    } else {
+        theta_wp = theta_sat * pow(phi_sat_cm / wilting_point_head_cm, 1.0 / b_exp);
+    }
+    return theta_wp;
 }
 
 
@@ -198,7 +223,7 @@ void dsbm_soil_cost_from_params(double klf_m_per_h,
     par.klf_m_per_h = klf_m_per_h;
     par.theta_fc = soil_cost_theta_fc(par.theta_sat, par.phi_sat_cm, par.b_exp);
     par.theta_aet_eq_pet = par.theta_fc;
-    par.theta_wp = SOIL_COST_THETA_WP;
+    par.theta_wp = soil_cost_theta_wp(par.theta_sat, par.phi_sat_cm, par.b_exp);
 
     for (i_disc = 0; i_disc < NDISC; i_disc++) {
         theta_current[i_disc] = theta_in[i_disc];
@@ -305,7 +330,7 @@ void dsbm_soil_series_from_params(double klf_m_per_h,
     par.klf_m_per_h = klf_m_per_h;
     par.theta_fc = soil_cost_theta_fc(par.theta_sat, par.phi_sat_cm, par.b_exp);
     par.theta_aet_eq_pet = par.theta_fc;
-    par.theta_wp = SOIL_COST_THETA_WP;
+    par.theta_wp = soil_cost_theta_wp(par.theta_sat, par.phi_sat_cm, par.b_exp);
 
     for (i_disc = 0; i_disc < NDISC; i_disc++) {
         theta_current[i_disc] = theta_in[i_disc];

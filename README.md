@@ -570,7 +570,7 @@ for these experiments, not to build or run the model.
 | `tapenade/initial/`     | E0          | first one-timestep test: percolation with respect to Ksat |
 | `tapenade/klf/`         | E1-E7       | tangent of lateral flow with respect to k_lf; substep and lateral-scheme effects |
 | `tapenade/cost/`        | E8-E9       | gradient of a cost function (sum of 1 - NSE for lateral flow and percolation) with respect to k_lf and perc_limiter; tangent and adjoint; BFGS calibration |
-| `tapenade/soil_params/` | E10         | four parameters (k_lf, perc_limiter, Ksat, b), with phi_sat computed from Ksat and theta_fc from phi_sat and b inside the differentiated code |
+| `tapenade/soil_params/` | E10         | four parameters (k_lf, perc_limiter, Ksat, b), with phi_sat computed from Ksat, and theta_fc and theta_wp from phi_sat and b, inside the differentiated code |
 
 For example:
 
