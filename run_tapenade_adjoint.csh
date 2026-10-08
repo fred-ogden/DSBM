@@ -74,14 +74,32 @@ end
 echo "==== 3. running Tapenade (tangent mode, then reverse mode)"
 cd $work_dir
 tapenade -tangent -head "$head_spec" -O generated_d $sources >& generated_d/tapenade.log
-tapenade -reverse -head "$head_spec" -O generated_b $sources >& generated_b/tapenade.log
+# Reverse mode.  Tapenade 3.16 crashed in its TBR recomputation analysis
+# (ADTBRAnalyzer RecompInfo, ArrayIndexOutOfBounds) on this code, so retry
+# with that optimization off, and finally with TBR analysis off entirely
+# (stores every overwritten value: more memory, simplest for Tapenade).
+set reverse_options_used = "none"
+foreach reverse_options ( "" "-nooptim recomputeintermediates" "-nooptim recomputeintermediates -nooptim tbr" )
+    rm -f generated_b/*
+    tapenade -reverse $reverse_options -head "$head_spec" -O generated_b $sources >& generated_b/tapenade.log
+    if ( -f generated_b/tapenade_cost_primal_b.c ) then
+        set reverse_options_used = "$reverse_options"
+        if ( "$reverse_options_used" == "" ) set reverse_options_used = "(defaults)"
+        break
+    endif
+    echo "NOTE: tapenade -reverse $reverse_options failed; log saved"
+    cp generated_b/tapenade.log failed_reverse_`echo "$reverse_options" | tr -c 'a-z' '_'`.log
+end
 cd ../..
+echo "reverse-mode options that worked: $reverse_options_used"
 
 foreach mode ( d b )
     set gen = $work_dir/generated_$mode
     if ( ! -f $gen/tapenade_cost_primal_$mode.c ) then
         echo "ERROR: Tapenade did not produce $gen/tapenade_cost_primal_$mode.c.  Log:"
         cat $gen/tapenade.log
+        echo "---- logs of earlier reverse attempts:"
+        cat $work_dir/failed_reverse_*.log
         exit 1
     endif
     echo "---- Tapenade log, mode $mode (last 15 lines):"
