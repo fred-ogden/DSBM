@@ -14,3 +14,11 @@ Noah-MP runoff/groundwater machinery.
 
 Comparison-wrapper choices are documented at the top of
 src/noahmp_soilwater_stateless.c.  In particular, DWSAT is derived from the same Clapp-Hornberger relations used by DSBM because the supplied Noah-MP files use parameters%DWSAT but do not contain its parameter construction code.
+
+Oct. 6-8, 2026, used Tapenade to make this scheme differentiable!   This code produces bitwise iid results using:
+
+soil_wilting_point_m3_per_m3=0.10, 
+plus --nsub 0 --lateral-forward-euler 
+
+ Your ../dsbm_control worktree is still there for checking that.
+
