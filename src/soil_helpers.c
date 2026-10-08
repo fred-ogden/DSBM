@@ -108,18 +108,29 @@ void soil_free_ch_lut(SoilLookupTables *lut)
 }
 
 /************/ // CH analytic relations (psi in m, K in m/h)
+//
+// The functions from here through the lateral removal functions are on
+// the path that Tapenade differentiates.  Like the kernel, they declare
+// all locals (including loop indices) at the top of the function and use
+// no ternary (?:) operators or continue statements, as Tapenade reverse
+// mode (adjoint) requires.  The arithmetic is unchanged.
 double psi_from_theta(double theta,
                       double theta_sat,
                       double phi_sat_cm,
                       double b_exp)
 {
-    double th = theta;
+    double th;       // clamped soil moisture (-)
+    double phi_m;    // air-entry head (m)
+    double ratio;    // th / theta_sat (-)
+    double psi_m;    // capillary head (m)
+
+    th = theta;
     if (th < THETA_MIN) th = THETA_MIN;
     if (th > theta_sat) th = theta_sat;
 
-    double phi_m = phi_sat_cm / 100.0;
-    double ratio = th / theta_sat;
-    double psi_m = phi_m * pow(ratio, -b_exp);
+    phi_m = phi_sat_cm / 100.0;
+    ratio = th / theta_sat;
+    psi_m = phi_m * pow(ratio, -b_exp);
     return psi_m;
 }
 
@@ -129,10 +140,14 @@ double theta_from_psi(double psi_m,
                       double phi_sat_cm,
                       double b_exp)
 {
+    double phi_m;    // air-entry head (m)
+    double ratio;    // psi_m / phi_m (-)
+    double th;       // soil moisture (-)
+
     if (psi_m <= 0.0) return theta_sat;
-    double phi_m = phi_sat_cm / 100.0;
-    double ratio = psi_m / phi_m;
-    double th = theta_sat * pow(ratio, -1.0 / b_exp);
+    phi_m = phi_sat_cm / 100.0;
+    ratio = psi_m / phi_m;
+    th = theta_sat * pow(ratio, -1.0 / b_exp);
     if (th < 0.0) th = 0.0;
     if (th > theta_sat) th = theta_sat;
     return th;
@@ -144,14 +159,20 @@ double K_from_theta(double theta,
                     double K_sat_cm_per_h,
                     double b_exp)
 {
-    double K_sat_m_per_h = K_sat_cm_per_h / 100.0;
-    double th = theta;
+    double K_sat_m_per_h;   // saturated conductivity (m/h)
+    double th;              // clamped soil moisture (-)
+    double ratio;           // th / theta_sat (-)
+    double expo;            // 2 b + 3 (-)
+    double K;               // conductivity (m/h)
+
+    K_sat_m_per_h = K_sat_cm_per_h / 100.0;
+    th = theta;
     if (th < THETA_MIN) th = THETA_MIN;
     if (th > theta_sat) th = theta_sat;
 
-    double ratio = th / theta_sat;
-    double expo  = 2.0 * b_exp + 3.0;
-    double K = K_sat_m_per_h * pow(ratio, expo);
+    ratio = th / theta_sat;
+    expo  = 2.0 * b_exp + 3.0;
+    K = K_sat_m_per_h * pow(ratio, expo);
     if (K < 1.0e-16) K = 1.0e-16;
     return K;
 }
@@ -168,15 +189,24 @@ void eval_theta_to_props(const SoilLookupTables *lut,
                          double *psi_m_out,
                          double *K_m_per_h_out)
 {
+    double denom;    // theta_sat - theta_r (-)
+    double Theta;    // scaled soil moisture (-)
+    double lnT;      // log(Theta), clamped
+    double f;        // fractional table position
+    int i0;          // table interval
+    double fn;       // last table position
+    double t;        // position within the interval (0..1)
+    double lnpsi;    // interpolated log capillary head
+    double lnK;      // interpolated log conductivity
+
     if (lut) {
         // Theta scaled by residual, as in your LUT: Theta=(theta-theta_r)/(theta_sat-theta_r)
-        double denom = theta_sat - theta_r;
+        denom = theta_sat - theta_r;
         if (denom <= 0.0) denom = 1.0;
-        double Theta = (theta - theta_r) / denom;
+        Theta = (theta - theta_r) / denom;
         if (Theta < 0.0) Theta = 0.0;
         if (Theta > 1.0) Theta = 1.0;
 
-        double lnT;
         if (Theta <= 0.0) lnT = lut->lnTheta_min;
         else {
             lnT = log(Theta);
@@ -184,14 +214,13 @@ void eval_theta_to_props(const SoilLookupTables *lut,
             if (lnT > 0.0) lnT = 0.0;
         }
 
-        double f = (lnT - lut->lnTheta_min) * lut->inv_dlnTheta;
-        int i0;
+        f = (lnT - lut->lnTheta_min) * lut->inv_dlnTheta;
         if (f <= 0.0) {
             i0 = 0;
             *psi_m_out     = exp(lut->lnpsi[0]);
             *K_m_per_h_out = exp(lut->lnK[0]);
         } else {
-            double fn = (double)(lut->n - 1);
+            fn = (double)(lut->n - 1);
             if (f >= fn) {
                 i0 = lut->n - 2;
                 *psi_m_out     = exp(lut->lnpsi[lut->n - 1]);
@@ -206,9 +235,9 @@ void eval_theta_to_props(const SoilLookupTables *lut,
                 }
                 if (i0 < 0) i0 = 0;
                 if (i0 > lut->n - 2) i0 = lut->n - 2;
-                double t = f - (double)i0;
-                double lnpsi = lut->lnpsi[i0] + t * (lut->lnpsi[i0+1] - lut->lnpsi[i0]);
-                double lnK   = lut->lnK[i0]   + t * (lut->lnK[i0+1]   - lut->lnK[i0]);
+                t = f - (double)i0;
+                lnpsi = lut->lnpsi[i0] + t * (lut->lnpsi[i0+1] - lut->lnpsi[i0]);
+                lnK   = lut->lnK[i0]   + t * (lut->lnK[i0+1]   - lut->lnK[i0]);
                 *psi_m_out     = exp(lnpsi);
                 *K_m_per_h_out = exp(lnK);
             }
@@ -234,11 +263,18 @@ void compute_props_with_option_stateless(const SoilLookupTables *lut,
                                          double b_exp,
                                          int hint_inout[NDISC])
 {
-    for (int i = 0; i < NDISC; i++) {
-        int *hptr = hint_inout ? &hint_inout[i] : NULL;
+    int i;
+    int *hint_pointer;   // this disc's hint, or NULL when no hints are given
+
+    for (i = 0; i < NDISC; i++) {
+        if (hint_inout) {
+            hint_pointer = &hint_inout[i];
+        } else {
+            hint_pointer = NULL;
+        }
         eval_theta_to_props(lut, theta[i], theta_r, theta_sat,
                             phi_sat_cm, K_sat_cm_per_h, b_exp,
-                            hptr, &psi_m_out[i], &K_m_per_h_out[i]);
+                            hint_pointer, &psi_m_out[i], &K_m_per_h_out[i]);
     }
 }
 
@@ -247,9 +283,13 @@ double flux_DB_pair(double psi_up, double K_up,
                     double psi_dn, double K_dn,
                     double dz_up,  double dz_dn)
 {
-    double dz_int = 0.5 * (dz_up + dz_dn);
-    double term   = 1.0 + (psi_dn - psi_up) / dz_int;
-    double K_int  = 0.5 * (K_up + K_dn);
+    double dz_int;   // distance between disc centers (m)
+    double term;     // 1 + head gradient (-)
+    double K_int;    // interface conductivity (m/h)
+
+    dz_int = 0.5 * (dz_up + dz_dn);
+    term   = 1.0 + (psi_dn - psi_up) / dz_int;
+    K_int  = 0.5 * (K_up + K_dn);
     if (K_int < 1.0e-16) K_int = 1.0e-16;
     return K_int * term;
 }
@@ -261,27 +301,45 @@ int choose_n_sub_dt(double rain_mm_per_h,
                     double dzmin,
                     double dt_hours)
 {
-    int n_sub = 1;
+    int n_sub;
+    double qmax0;              // largest interface flux magnitude (m/h)
+    double move_potential;     // qmax0 * dt_hours (m)
+    double flux_ratio;         // flux criterion (-)
+    double rain_rate_m_per_h;  // rainfall rate (m/h)
+    double rain_hour_m;        // rainfall this timestep (m)
+    double cap1_m;             // free storage of disc 1 (m)
+    double rain_ratio;         // rain criterion (-)
+    double severity;           // largest criterion (-)
 
-    double qmax0 = fabs(q12_0);
+    n_sub = 1;
+
+    qmax0 = fabs(q12_0);
     if (fabs(q23_0) > qmax0) qmax0 = fabs(q23_0);
     if (fabs(q34_0) > qmax0) qmax0 = fabs(q34_0);
 
-    double move_potential = qmax0 * dt_hours;  // m
-    double flux_ratio = (dzmin > 0.0) ? (move_potential / (0.10 * dzmin)) : 0.0;
+    move_potential = qmax0 * dt_hours;  // m
+    if (dzmin > 0.0) {
+        flux_ratio = move_potential / (0.10 * dzmin);
+    } else {
+        flux_ratio = 0.0;
+    }
 
-    double rain_rate_m_per_h = rain_mm_per_h / 1000.0;
-    double rain_hour_m = rain_rate_m_per_h * dt_hours;
-    double cap1_m = (theta_sat - theta1) * dz1;
+    rain_rate_m_per_h = rain_mm_per_h / 1000.0;
+    rain_hour_m = rain_rate_m_per_h * dt_hours;
+    cap1_m = (theta_sat - theta1) * dz1;
     if (cap1_m < 1e-12) cap1_m = 1e-12;
-    double rain_ratio = rain_hour_m / (0.20 * cap1_m);
+    rain_ratio = rain_hour_m / (0.20 * cap1_m);
 
-    double severity = 0.0;
+    severity = 0.0;
     if (flux_ratio > severity) severity = flux_ratio;
     if (rain_ratio > severity) severity = rain_ratio;
 
     if (severity <= 1.0) {
-        n_sub = (rain_mm_per_h > 0.0) ? 2 : 1;
+        if (rain_mm_per_h > 0.0) {
+            n_sub = 2;
+        } else {
+            n_sub = 1;
+        }
     } else if (severity <= 2.0) {
         n_sub = 4;
     } else if (severity <= 3.0) {
@@ -303,34 +361,42 @@ double remove_lateral_to_subsurface_nash_substep(double theta[NDISC], const doub
                                                  double rate_const_m_per_h, double dt_sub,
                                                  double removed_by_disc_accum_m[NDISC])
 {
-    double total_removed_m = 0.0;
+    int i;
+    double total_removed_m;   // removal from all discs (m)
+    double denom;             // theta_sat - theta_fc (-)
+    double frac;              // (theta - theta_fc) / denom (-)
+    double potential_m;       // uncapped removal (m)
+    double avail_m;           // moisture above theta_fc (m)
+    double take_m;            // removal applied (m)
 
-    for (int i = 0; i < NDISC; i++) {
-        if (theta[i] <= theta_fc) continue;
+    total_removed_m = 0.0;
 
-        double denom = theta_sat - theta_fc;
-        if (denom < 1.0e-12) denom = 1.0e-12;
+    for (i = 0; i < NDISC; i++) {
+        if (theta[i] > theta_fc) {
+            denom = theta_sat - theta_fc;
+            if (denom < 1.0e-12) denom = 1.0e-12;
 
-        double frac = (theta[i] - theta_fc) / denom;
-        if (frac < 0.0) frac = 0.0;
-        if (frac > 1.0) frac = 1.0;
+            frac = (theta[i] - theta_fc) / denom;
+            if (frac < 0.0) frac = 0.0;
+            if (frac > 1.0) frac = 1.0;
 
-        double potential_m = rate_const_m_per_h * frac * dt_sub;
-        double avail_m = (theta[i] - theta_fc) * dz[i];
-        if (avail_m < 0.0) avail_m = 0.0;
+            potential_m = rate_const_m_per_h * frac * dt_sub;
+            avail_m = (theta[i] - theta_fc) * dz[i];
+            if (avail_m < 0.0) avail_m = 0.0;
 
-        double take_m = potential_m;
-        if (take_m > avail_m) {
-            take_m = avail_m;
-            DSBM_CENSUS(CENSUS_LAT_EULER_CAP, i)
-        }
+            take_m = potential_m;
+            if (take_m > avail_m) {
+                take_m = avail_m;
+                DSBM_CENSUS(CENSUS_LAT_EULER_CAP, i)
+            }
 
-        if (take_m > 0.0) {
-            theta[i] -= take_m / dz[i];
-            if (theta[i] < theta_fc) theta[i] = theta_fc;
+            if (take_m > 0.0) {
+                theta[i] -= take_m / dz[i];
+                if (theta[i] < theta_fc) theta[i] = theta_fc;
 
-            total_removed_m += take_m;
-            if (removed_by_disc_accum_m) removed_by_disc_accum_m[i] += take_m;
+                total_removed_m += take_m;
+                if (removed_by_disc_accum_m) removed_by_disc_accum_m[i] += take_m;
+            }
         }
     }
 
@@ -363,25 +429,33 @@ double remove_lateral_to_subsurface_nash_substep_exponential(
                                                  double rate_const_m_per_h, double dt_sub,
                                                  double removed_by_disc_accum_m[NDISC])
 {
-    double total_removed_m = 0.0;
+    int i;
+    double total_removed_m;   // removal from all discs (m)
+    double denom;             // theta_sat - theta_fc (-)
+    double excess_theta;      // theta - theta_fc (m3/m3)
+    double decay_exponent;    // k_lf dt / (dz denom) (-)
+    double removed_theta;     // soil moisture removed (m3/m3)
+    double take_m;            // removal applied (m)
 
-    for (int i = 0; i < NDISC; i++) {
-        if (theta[i] <= theta_fc) continue;
+    total_removed_m = 0.0;
 
-        double denom = theta_sat - theta_fc;
-        if (denom < 1.0e-12) denom = 1.0e-12;
+    for (i = 0; i < NDISC; i++) {
+        if (theta[i] > theta_fc) {
+            denom = theta_sat - theta_fc;
+            if (denom < 1.0e-12) denom = 1.0e-12;
 
-        double excess_theta = theta[i] - theta_fc;                    // m3/m3
-        double decay_exponent = rate_const_m_per_h * dt_sub / (dz[i] * denom);
-        double removed_theta = excess_theta * (1.0 - exp(-decay_exponent));
-        double take_m = removed_theta * dz[i];
+            excess_theta = theta[i] - theta_fc;                    // m3/m3
+            decay_exponent = rate_const_m_per_h * dt_sub / (dz[i] * denom);
+            removed_theta = excess_theta * (1.0 - exp(-decay_exponent));
+            take_m = removed_theta * dz[i];
 
-        if (take_m > 0.0) {
-            theta[i] -= removed_theta;
-            if (theta[i] < theta_fc) theta[i] = theta_fc;
+            if (take_m > 0.0) {
+                theta[i] -= removed_theta;
+                if (theta[i] < theta_fc) theta[i] = theta_fc;
 
-            total_removed_m += take_m;
-            if (removed_by_disc_accum_m) removed_by_disc_accum_m[i] += take_m;
+                total_removed_m += take_m;
+                if (removed_by_disc_accum_m) removed_by_disc_accum_m[i] += take_m;
+            }
         }
     }
 
