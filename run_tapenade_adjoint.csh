@@ -142,7 +142,9 @@ foreach gen_c ( $gen_d/*_d.c $gen_b/*_b.c )
     set objects = "$objects $obj"
 end
 
-cc -std=c11 -O2 -I$kit_dir -c $kit_dir/adStack.c -o $work_dir/adStack.o
+# adStack.c calls clock_gettime(), which strict -std=c11 hides unless a
+# POSIX feature level is requested.
+cc -std=c11 -O2 -D_POSIX_C_SOURCE=200809L -I$kit_dir -c $kit_dir/adStack.c -o $work_dir/adStack.o
 if ( $status != 0 ) then
     echo "ERROR: compiling adStack.c failed"
     exit 1
