@@ -151,8 +151,8 @@ static void usage(const char *prog)
         "\n"
         "Notes:\n"
         "  * Outputs are comma-delimited CSV with a header line starting with '#'.\n"
-        "  * JD uses astronomical convention (day changes at noon). If your input\n"
-        "    times are local, set --utc-offset-hours accordingly to produce strict JD.\n",
+        "  * JD uses astronomical convention (day changes at noon) and treats the\n"
+        "    forcing times as UTC.\n",
         prog);
 }
 
