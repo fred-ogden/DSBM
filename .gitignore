@@ -38,3 +38,4 @@ tapenade_test.c
 tapenade_klf_derivative_test
 tapenade_cost_derivative_test
 tapenade_adjoint_test
+tapenade_soil_params_test
