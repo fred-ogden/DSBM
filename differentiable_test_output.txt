@@ -1,0 +1,212 @@
+Ran:  tapenade/soil_params/run_tapenade_soil_params.csh > differentiable_test_output.txt
+
+Produced output:
+
+==== 1. building production library (clean rebuild)
+==== 2. preparing Tapenade input in tapenade_input/soil_params
+==== 3. running Tapenade (tangent mode, then reverse mode)
+reverse-mode options that worked: (defaults)
+---- Tapenade log, mode d (last 15 lines):
+Tapenade 3.16 (develop) -  2 Sep 2026 09:00 - Java 25.0.4.1 Linux
+@@ TAPENADE_HOME=/user2/ogden/opt/tapenade/tapenade_3.16/bin/..
+Tool: (DD99) Warning: Some features of C are not yet supported
+Diff-liveness analysis turned off
+@@ Creating generated_d/soil_data_types_d.h
+@@ Creating generated_d/soil_helpers_d.h
+@@ Creating generated_d/dsbm_soilmoisture_stateless_d.h
+@@ Created generated_d/tapenade_soil_cost_primal_d.c generated_d/dsbm_soilmoisture_stateless_d.c generated_d/soil_helpers_d.c generated_d/soil_data_types_d.h generated_d/soil_helpers_d.h generated_d/dsbm_soilmoisture_stateless_d.h 
+@@ Created generated_d/tapenade_soil_cost_primal_d.msg
+---- Tapenade log, mode b (last 15 lines):
+Tapenade 3.16 (develop) -  2 Sep 2026 09:00 - Java 25.0.4.1 Linux
+@@ TAPENADE_HOME=/user2/ogden/opt/tapenade/tapenade_3.16/bin/..
+Tool: (DD99) Warning: Some features of C are not yet supported
+(AD15) Not sure how to pop *hint_pointer of type:int with instruction:{popControl1b(&#branch#),if eq(#branch#,1) then popInteger4(hint_pointer) else _}
+(AD15) Not sure how to push *hint_pointer of type:int with instruction:if hint_pointer then {pushInteger4(*hint_pointer),pushControl1b(1)} else pushControl1b(0)
+(AD15) Not sure how to initialize the derivative *#K_sat_cm_per_hb# of type:double with instruction:*#K_sat_cm_per_hb#=0.0
+@@ Creating generated_b/soil_data_types_b.h
+@@ Creating generated_b/soil_helpers_b.h
+@@ Creating generated_b/dsbm_soilmoisture_stateless_b.h
+@@ Created generated_b/tapenade_soil_cost_primal_b.c generated_b/dsbm_soilmoisture_stateless_b.c generated_b/soil_helpers_b.c generated_b/soil_data_types_b.h generated_b/soil_helpers_b.h generated_b/dsbm_soilmoisture_stateless_b.h 
+@@ Created generated_b/tapenade_soil_cost_primal_b.msg
+
+==== 4. generated prototypes
+void dsbm_soil_cost_from_params_d(double klf_m_per_h, double klf_m_per_hd, 
+        double perc_limiter_0_to_1, double perc_limiter_0_to_1d, double 
+        K_sat_cm_per_h, double K_sat_cm_per_hd, double b_exp, double b_expd, 
+        const double *theta_in, int n_steps, int n_sub_setting, int 
+        n_sub_settingd, const double *rain_mm_per_h, const double *
+        pet_mm_per_h, const double *observed_lateral_m, const double *
+        observed_percolation_m, double sst_lateral_m2, double 
+        sst_percolation_m2, double *cost_function_value, double *
+        cost_function_valued) {
+void dsbm_soil_cost_from_params_b(double klf_m_per_h, double *klf_m_per_hb, 
+        double perc_limiter_0_to_1, double *perc_limiter_0_to_1b, double 
+        K_sat_cm_per_h, double *K_sat_cm_per_hb, double b_exp, double *b_expb,
+        const double *theta_in, int n_steps, int n_sub_setting, int *
+        n_sub_settingb, const double *rain_mm_per_h, const double *
+        pet_mm_per_h, const double *observed_lateral_m, const double *
+        observed_percolation_m, double sst_lateral_m2, double 
+        sst_percolation_m2, double *cost_function_value, double *
+        cost_function_valueb) {
+(integer slot flags: tangent '-DSOIL_COST_TANGENT_HAS_NSUB_SLOT'  adjoint '-DSOIL_COST_ADJOINT_NSUB_SLOT_BY_POINTER')
+
+==== 5. compiling
+
+==== 6. running experiments
+Consistency check passed: primal and tangent cost values agree.
+Forcing hours available: 78168; problem: first 8760 hours.
+TWIN EXPERIMENT: tests the derivatives, not identifiability from discharge.
+====================================================================
+E10a ADJOINT versus TANGENT, 4 parameters (1 year)
+====================================================================
+test point: Ksat = 3.0000 cm/h, b = 5.500  ->  phi_sat = 7.275 cm, theta_fc = 0.2177, theta_wp = 0.1090
+            k_lf = 5.0e-04 m/h, perc_limiter = 0.80
+truth:      Ksat = 1.2168 cm/h, b = 4.050  ->  phi_sat = 9.768 cm, theta_fc = 0.1822, theta_wp = 0.0712
+
+--- fixed 4 substeps ---
+                                        adjoint                  tangent   rel diff
+dcost/dk_lf             -1.0587478925463279e+03  -1.0587478925463247e+03  -3.01e-15
+dcost/dperc_limiter     +1.8600936460726643e+00  +1.8600936460726811e+00  -9.07e-15
+dcost/dKsat             +1.0126794922305165e+00  +1.0126794922305127e+00   3.73e-15
+dcost/db                -4.0278301523112492e-01  -4.0278301523112547e-01   1.38e-15
+dot-product test, w = 1:  (J v)  versus  (J^T w) . v
+   v1:  -1.0587478925463247e+03  -1.0587478925463279e+03  rel diff -3.01e-15
+   v2:  +7.0122219513383133e-01  +7.0122219513382567e-01  rel diff -8.07e-15
+   v3:  -1.3934508901531806e-01  -1.3934508901531828e-01  rel diff -1.59e-15
+   v4:  +1.4154625074616400e+00  +1.4154625074616414e+00  rel diff 9.41e-16
+
+--- fixed 12 substeps ---
+                                        adjoint                  tangent   rel diff
+dcost/dk_lf             -1.0674460270209458e+03  -1.0674460270209554e+03   8.95e-15
+dcost/dperc_limiter     +1.9077121814708933e+00  +1.9077121814708897e+00   1.86e-15
+dcost/dKsat             +1.1157391025879919e+00  +1.1157391025879904e+00   1.39e-15
+dcost/db                -4.0787205727074560e-01  -4.0787205727074438e-01  -2.99e-15
+dot-product test, w = 1:  (J v)  versus  (J^T w) . v
+   v1:  -1.0674460270209554e+03  -1.0674460270209458e+03  rel diff 8.95e-15
+   v2:  +7.4790403607335099e-01  +7.4790403607337375e-01  rel diff 3.04e-14
+   v3:  -1.7993874871928134e-01  -1.7993874871928450e-01  rel diff -1.76e-14
+   v4:  +1.5236111598587281e+00  +1.5236111598587376e+00  rel diff 6.27e-15
+(v1 = k_lf only; v2, v3 mixed; v4 = Ksat up and b down together)
+
+====================================================================
+E10b ADJOINT versus CENTRAL FINITE DIFFERENCES, fixed 4 substeps (1 year)
+     step = relative step * parameter value
+====================================================================
+
+dcost/dk_lf   adjoint -1.058747892546e+03
+    relative step      finite difference     rel diff
+            1e-02    -1.058549117022e+03     1.88e-04
+            1e-03    -1.058751199521e+03    -3.12e-06
+            1e-04    -1.058749801361e+03    -1.80e-06
+            1e-05    -1.058747925708e+03    -3.13e-08
+            1e-06    -1.058747878924e+03     1.29e-08
+
+dcost/dperc_limiter   adjoint +1.860093646073e+00
+    relative step      finite difference     rel diff
+            1e-02    +1.860061706460e+00    -1.72e-05
+            1e-03    +1.860093378732e+00    -1.44e-07
+            1e-04    +1.860093642822e+00    -1.75e-09
+            1e-05    +1.860093645514e+00    -3.00e-10
+            1e-06    +1.860093651329e+00     2.83e-09
+
+dcost/dKsat   adjoint +1.012679492231e+00
+    relative step      finite difference     rel diff
+            1e-02    +1.012662567373e+00    -1.67e-05
+            1e-03    +1.012679309981e+00    -1.80e-07
+            1e-04    +1.012679562491e+00     6.94e-08
+            1e-05    +1.012679492348e+00     1.16e-10
+            1e-06    +1.012679492337e+00     1.05e-10
+
+dcost/db   adjoint -4.027830152311e-01
+    relative step      finite difference     rel diff
+            1e-02    -4.028363808972e-01    -1.32e-04
+            1e-03    -4.027827008111e-01     7.81e-07
+            1e-04    -4.027827624689e-01     6.28e-07
+            1e-05    -4.027830156396e-01    -1.01e-09
+            1e-06    -4.027830156274e-01    -9.84e-10
+
+Large steps: truncation error; small steps: roundoff and the kinks where
+a threshold (theta_fc, theta_wp, caps) switches inside the step.
+
+====================================================================
+E10c RUN TIME, 8760 hours, fixed 4 substeps (best of 5), and memory
+====================================================================
+primal cost function               0.0059 s   (1.00 x primal)
+tangent, one direction             0.0101 s   (1.70 x primal)
+tangent, whole gradient (4 runs)   0.0404 s   (6.81 x primal)
+adjoint, whole gradient            0.0396 s   (6.68 x primal)
+adjoint speed-up over tangent for 4 parameters: 1.02
+adjoint memory, first 1-year run: peak resident growth 1.5 MB (44.9 bytes per substep)
+
+====================================================================
+E10d BFGS CALIBRATION, 4 parameters, u = (ln k_lf, perc_limiter, ln Ksat, b)
+     twin experiment (1 year); start = E10a test point
+====================================================================
+
+--- adjoint gradient, fixed 4 substeps ---
+iter            cost    k_lf(m/h)  perc_lim      Ksat        b   |grad u| evals
+   0  1.97020840e+00  5.00000e-04   0.80000   3.00000   5.5000  3.624e+00     1
+   1  1.20520104e+00  8.48935e-04   0.01000   0.14379   5.9028  8.129e-01     3
+   2  8.86290502e-01  1.29374e-03   0.57833   0.10472   5.9343  3.895e-01     5
+   3  7.53466627e-01  1.67049e-03   0.87793   0.12124   5.8963  3.880e-01     7
+   4  6.27316001e-01  3.36671e-03   0.99900   0.38359   5.6336  1.125e+00     9
+   5  3.36705373e-01  3.10441e-03   0.99900   0.67645   5.5155  8.803e-01    11
+   6  4.84422992e-02  1.90776e-03   0.45412   1.65899   5.2802  4.676e-01    14
+   7  3.03913953e-02  1.77537e-03   0.35697   1.60106   5.2834  1.075e-01    19
+   8  2.43543285e-02  1.90389e-03   0.36005   1.63873   5.2463  6.156e-02    21
+   9  2.20434184e-02  1.99266e-03   0.31546   1.76695   5.1886  7.175e-02    24
+  10  2.01725307e-02  2.08212e-03   0.33553   1.75330   5.1085  7.285e-02    26
+  11  1.78866634e-02  2.08449e-03   0.33580   1.74613   5.0321  6.922e-02    28
+  12  1.87970233e-03  2.03310e-03   0.43018   1.35068   4.0559  3.866e-02    30
+  13  3.92526410e-04  2.00527e-03   0.47043   1.24158   4.0692  4.910e-02    32
+  14  1.95630947e-04  2.00914e-03   0.47298   1.25182   4.1023  2.766e-02    34
+  15  4.01444640e-05  2.00872e-03   0.48653   1.23723   4.0778  8.871e-03    36
+  16  9.07954601e-07  2.00080e-03   0.49794   1.21967   4.0547  1.283e-03    38
+  17  2.95140366e-08  2.00015e-03   0.49974   1.21700   4.0501  3.977e-04    40
+  18  7.69331009e-10  1.99995e-03   0.49999   1.21683   4.0500  5.476e-05    42
+  19  8.80026995e-12  2.00000e-03   0.50000   1.21679   4.0500  1.570e-06    44
+  20  3.96905033e-14  2.00000e-03   0.50000   1.21680   4.0500  3.560e-07    46
+  21  3.42487865e-17  2.00000e-03   0.50000   1.21680   4.0500  6.198e-09    48
+  22  7.38216065e-20  2.00000e-03   0.50000   1.21680   4.0500  3.073e-10    50
+  23  4.83168259e-23  2.00000e-03   0.50000   1.21680   4.0500  1.111e-11    52
+gradient method: adjoint   wall-clock time for the whole calibration: 1.202 s
+   k_lf          2.0000000000e-03   truth 2.000000e-03   rel err +8.82e-12
+   perc_limiter  5.0000000000e-01   truth 5.000000e-01   rel err -4.27e-12
+   Ksat          1.2168000000e+00   truth 1.216800e+00   rel err +7.87e-12
+   b             4.0500000000e+00   truth 4.050000e+00   rel err +2.29e-13
+   derived: Ksat = 1.2168 cm/h, b = 4.050  ->  phi_sat = 9.768 cm, theta_fc = 0.1822, theta_wp = 0.0712
+
+--- tangent gradient, fixed 4 substeps ---
+iter            cost    k_lf(m/h)  perc_lim      Ksat        b   |grad u| evals
+   0  1.97020840e+00  5.00000e-04   0.80000   3.00000   5.5000  3.624e+00     1
+   1  1.20520104e+00  8.48935e-04   0.01000   0.14379   5.9028  8.129e-01     3
+   2  8.86290502e-01  1.29374e-03   0.57833   0.10472   5.9343  3.895e-01     5
+   3  7.53466627e-01  1.67049e-03   0.87793   0.12124   5.8963  3.880e-01     7
+   4  6.27316001e-01  3.36671e-03   0.99900   0.38359   5.6336  1.125e+00     9
+   5  3.36705373e-01  3.10441e-03   0.99900   0.67645   5.5155  8.803e-01    11
+   6  4.84422992e-02  1.90776e-03   0.45412   1.65899   5.2802  4.676e-01    14
+   7  3.03913953e-02  1.77537e-03   0.35697   1.60106   5.2834  1.075e-01    19
+   8  2.43543285e-02  1.90389e-03   0.36005   1.63873   5.2463  6.156e-02    21
+   9  2.20434184e-02  1.99266e-03   0.31546   1.76695   5.1886  7.175e-02    24
+  10  2.01725307e-02  2.08212e-03   0.33553   1.75330   5.1085  7.285e-02    26
+  11  1.78866634e-02  2.08449e-03   0.33580   1.74613   5.0321  6.922e-02    28
+  12  1.87970233e-03  2.03310e-03   0.43018   1.35068   4.0559  3.866e-02    30
+  13  3.92526410e-04  2.00527e-03   0.47043   1.24158   4.0692  4.910e-02    32
+  14  1.95630947e-04  2.00914e-03   0.47298   1.25182   4.1023  2.766e-02    34
+  15  4.01444640e-05  2.00872e-03   0.48653   1.23723   4.0778  8.871e-03    36
+  16  9.07954601e-07  2.00080e-03   0.49794   1.21967   4.0547  1.283e-03    38
+  17  2.95140366e-08  2.00015e-03   0.49974   1.21700   4.0501  3.977e-04    40
+  18  7.69331009e-10  1.99995e-03   0.49999   1.21683   4.0500  5.476e-05    42
+  19  8.80026996e-12  2.00000e-03   0.50000   1.21679   4.0500  1.570e-06    44
+  20  3.96905034e-14  2.00000e-03   0.50000   1.21680   4.0500  3.560e-07    46
+  21  3.42487927e-17  2.00000e-03   0.50000   1.21680   4.0500  6.198e-09    48
+  22  7.38217358e-20  2.00000e-03   0.50000   1.21680   4.0500  3.073e-10    50
+  23  4.83263096e-23  2.00000e-03   0.50000   1.21680   4.0500  1.111e-11    52
+gradient method: tangent   wall-clock time for the whole calibration: 1.230 s
+   k_lf          2.0000000000e-03   truth 2.000000e-03   rel err +8.82e-12
+   perc_limiter  5.0000000000e-01   truth 5.000000e-01   rel err -4.28e-12
+   Ksat          1.2168000000e+00   truth 1.216800e+00   rel err +7.87e-12
+   b             4.0500000000e+00   truth 4.050000e+00   rel err +2.29e-13
+   derived: Ksat = 1.2168 cm/h, b = 4.050  ->  phi_sat = 9.768 cm, theta_fc = 0.1822, theta_wp = 0.0712
+
+Results: output/tapenade_soil_params/results.txt
