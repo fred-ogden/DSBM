@@ -294,6 +294,96 @@ double flux_DB_pair(double psi_up, double K_up,
     return K_int * term;
 }
 
+// FLO 10/26: The explicit downward Darcy-Buckingham transfer can overshoot
+// equal total head, empty an upper disc, and lock the column into a two-substep
+// wet/dry oscillation.  Cap the transfer at equal head.  Use a fixed iteration
+// count to preserve compatibility with Tapenade differentiation.
+#define EQUAL_HEAD_LIMIT_ITERATIONS 30
+
+/************/ // FLO 10/26: Limit downward transfer to equal total head (m).
+// h(V) = ln(psi_upper(V)) - ln(psi_lower(V) + dz_int) is monotonic.
+// A positive h means the proposed downward transfer has passed equal head.
+double limit_downward_transfer_to_equal_head(double transfer_requested_m,
+                                             double theta_upper, double theta_lower,
+                                             double dz_upper_m, double dz_lower_m,
+                                             double theta_sat, double phi_sat_cm, double b_exp)
+{
+    int iteration;
+    double distance_between_centers_m;
+    double transfer_m;
+    double transfer_low_m;
+    double transfer_high_m;
+    double transfer_new_m;
+    double theta_upper_after;
+    double theta_lower_after;
+    double psi_upper_m;
+    double psi_lower_m;
+    double log_head_difference;
+    double log_head_difference_slope;
+    double limited_transfer_m;
+
+    distance_between_centers_m = 0.5 * (dz_upper_m + dz_lower_m);
+    limited_transfer_m = transfer_requested_m;
+
+    if (transfer_requested_m > 0.0) {
+        theta_upper_after = theta_upper - transfer_requested_m / dz_upper_m;
+        theta_lower_after = theta_lower + transfer_requested_m / dz_lower_m;
+        psi_upper_m = psi_from_theta(theta_upper_after, theta_sat, phi_sat_cm, b_exp);
+        psi_lower_m = psi_from_theta(theta_lower_after, theta_sat, phi_sat_cm, b_exp);
+
+        // FLO 10/26: Logarithms preserve the order of positive heads, so
+        // compare heads directly on the common path.  Evaluate logarithms
+        // only inside Newton when the requested transfer overshoots.
+        if (psi_upper_m > psi_lower_m + distance_between_centers_m) {
+            psi_upper_m = psi_from_theta(theta_upper, theta_sat, phi_sat_cm, b_exp);
+            psi_lower_m = psi_from_theta(theta_lower, theta_sat, phi_sat_cm, b_exp);
+
+            if (psi_upper_m >= psi_lower_m + distance_between_centers_m) {
+                limited_transfer_m = 0.0;
+            } else {
+                transfer_low_m = 0.0;
+                transfer_high_m = transfer_requested_m;
+                transfer_m = 0.5 * transfer_requested_m;
+                for (iteration = 0; iteration < EQUAL_HEAD_LIMIT_ITERATIONS; iteration++) {
+                    theta_upper_after = theta_upper - transfer_m / dz_upper_m;
+                    theta_lower_after = theta_lower + transfer_m / dz_lower_m;
+                    psi_upper_m = psi_from_theta(theta_upper_after, theta_sat, phi_sat_cm, b_exp);
+                    psi_lower_m = psi_from_theta(theta_lower_after, theta_sat, phi_sat_cm, b_exp);
+                    log_head_difference = log(psi_upper_m) - log(psi_lower_m + distance_between_centers_m);
+
+                    if (log_head_difference < 0.0) {
+                        transfer_low_m = transfer_m;
+                    } else {
+                        transfer_high_m = transfer_m;
+                    }
+
+                    log_head_difference_slope = 0.0;
+                    if (theta_upper_after > THETA_MIN && theta_upper_after < theta_sat) {
+                        log_head_difference_slope += b_exp / (theta_upper_after * dz_upper_m);
+                    }
+                    if (theta_lower_after > THETA_MIN && theta_lower_after < theta_sat) {
+                        log_head_difference_slope += b_exp * psi_lower_m /
+                            (theta_lower_after * dz_lower_m * (psi_lower_m + distance_between_centers_m));
+                    }
+
+                    transfer_new_m = 0.5 * (transfer_low_m + transfer_high_m);
+                    if (log_head_difference_slope > 0.0) {
+                        transfer_new_m = transfer_m - log_head_difference / log_head_difference_slope;
+                        if (transfer_new_m < transfer_low_m || transfer_new_m > transfer_high_m) {
+                            transfer_new_m = 0.5 * (transfer_low_m + transfer_high_m);
+                        }
+                    }
+                    transfer_m = transfer_new_m;
+                }
+                limited_transfer_m = transfer_m;
+                if (limited_transfer_m > transfer_requested_m) limited_transfer_m = transfer_requested_m;
+                if (limited_transfer_m < 0.0) limited_transfer_m = 0.0;
+            }
+        }
+    }
+    return limited_transfer_m;
+}
+
 /************/ // Choose number of substeps (uses dt_hours)
 int choose_n_sub_dt(double rain_mm_per_h,
                     double theta1, double theta_sat, double dz1,

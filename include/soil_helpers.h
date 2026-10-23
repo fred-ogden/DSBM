@@ -69,6 +69,18 @@ double flux_DB_pair(double psi_up, double K_up,
                     double psi_dn, double K_dn,
                     double dz_up,  double dz_dn);      // m/h, downward positive
 
+/* FLO 10/26: Explicit downward Darcy-Buckingham transfers could overshoot
+ * equal total head, emptying an upper disc and producing a persistent
+ * two-substep oscillation.  Limit the transfer to equal head to prevent
+ * this numerical instability; the implementation uses a fixed iteration
+ * count for compatibility with Tapenade differentiation.
+ * Returns the requested transfer if it does not cross equal head.
+ */
+double limit_downward_transfer_to_equal_head(double transfer_requested_m,
+                                             double theta_upper, double theta_lower,
+                                             double dz_upper_m, double dz_lower_m,
+                                             double theta_sat, double phi_sat_cm, double b_exp);
+
 /* Choose substeps using dt_hours (generic across NDISC) */
 int choose_n_sub_dt(double rain_mm_per_h,
                     double theta1, double theta_sat, double dz1,
