@@ -491,6 +491,18 @@ int soil_step_one_hour_stateless(
                 }
                 if (V < 0.0) V = 0.0;
 
+                // FLO 10/26: The explicit downward transfer can overshoot
+                // equal total head, empty the upper disc, and cause a
+                // persistent two-substep wet/dry oscillation.  Limit only
+                // downward transfers, after the existing storage caps.
+                // The unlimited option reproduces the legacy behavior.
+                if (ctrl->downward_transfer_scheme == DOWNWARD_TRANSFER_EQUAL_HEAD_LIMIT) {
+                    V = limit_downward_transfer_to_equal_head(V, theta[i], theta[i+1],
+                                                              geom->dz[i], geom->dz[i+1],
+                                                              par->theta_sat, par->phi_sat_cm,
+                                                              par->b_exp);
+                }
+
                 theta[i]   -= V / geom->dz[i];
                 theta[i+1] += V / geom->dz[i+1];
 

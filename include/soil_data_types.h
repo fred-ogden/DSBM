@@ -41,6 +41,14 @@ extern "C" {
 #define N_SUB_SETTING_DEFAULT     0   // use N_SUB_DEFAULT_COUNT
 #define N_SUB_SETTING_ADAPTIVE   (-1) // original adaptive substep choice
 
+// FLO 10/26: The explicit downward Darcy-Buckingham transfer could overshoot
+// equal total hydraulic head, emptying an upper disc and producing a persistent
+// two-substep wet/dry oscillation.  Select the equal-head limiter by default;
+// retain the unlimited scheme to reproduce legacy calculations.
+// Value 0 makes the corrected scheme the default for zero-initialized controls.
+#define DOWNWARD_TRANSFER_EQUAL_HEAD_LIMIT  0
+#define DOWNWARD_TRANSFER_UNLIMITED         1
+
 typedef struct {
     int    ndisc;                 // must equal NDISC
     int    deepest_root_disc;     // 1..ndisc
@@ -53,6 +61,10 @@ typedef struct {
     int    substep_lateral_severity; // adaptive only: 1 => also consider lateral removal rate
     int    lateral_scheme;        // LATERAL_SCHEME_EXPONENTIAL (0, default) or
                                   // LATERAL_SCHEME_FORWARD_EULER (1)
+    // FLO 10/26: Select the downward inter-disc transfer limiter; the
+    // equal-head default prevents numerical overshoot and oscillation.
+    int    downward_transfer_scheme; // DOWNWARD_TRANSFER_EQUAL_HEAD_LIMIT (0, default)
+                                     // or DOWNWARD_TRANSFER_UNLIMITED (1, legacy)
     double dt_hours;              // usually 1.0
 } SoilControl;
 
@@ -66,11 +78,11 @@ typedef struct {
     double theta_sat;             // saturation (m3/m3)
     double theta_fc;              // field capacity (m3/m3)
     double theta_wp;              // wilting point (m3/m3)
-    double theta_aet_eq_pet;      // AET = PET at / above this \u03b8 (m3/m3)
+    double theta_aet_eq_pet;      // AET = PET at / above this theta (m3/m3)
 
     double K_sat_cm_per_h;        // cm/h
     double phi_sat_cm;            // cm
-    double b_exp;                 // Clapp\u2013Hornberger exponent
+    double b_exp;                 // Clapp-Hornberger exponent
 
     double perc_limiter_0_to_1;   // 0..1 bottom drainage limiter
     double klf_m_per_h;           // lateral removal rate constant (m/h)
@@ -111,7 +123,7 @@ typedef struct {
     double rain_into_soil_m;
     double surface_precipitation_excess_m;
 
-    // Internal vertical exchanges: [0..NDISC-2] interfaces i\u2192i+1; [NDISC-1] bottom perc
+    // Internal vertical exchanges: [0..NDISC-2] interfaces i->i+1; [NDISC-1] bottom perc
     double interface_vol_m[NDISC];
     double interface_rate_m_per_h[NDISC];
 
@@ -124,8 +136,8 @@ typedef struct {
     double perc_m;
     double AET_m;
     double lateral_m;
-    double delta_storage_m;   // \u03a3(\u03b8_out-\u03b8_in)*dz
-    double residual_m;        // in - (outs) - \u0394S
+    double delta_storage_m;   // sum(theta_out-theta_in)*dz
+    double residual_m;        // in - (outs) - deltaS
 } TimestepSoilVolumeBalance;
 
 #ifdef __cplusplus
