@@ -98,6 +98,11 @@ active in the 78168-hour example record.  The
 limited transfer is found by a safeguarded Newton iteration with a fixed
 iteration count, so that Tapenade can differentiate it
 (`limit_downward_transfer_to_equal_head()` in `src/soil_helpers.c`).
+An exact pre-screen skips the overshoot test when the upper disc is at
+least as wet as the lower disc after the requested transfer, since
+equal head cannot then be overshot.  Experiment E11 shows that
+Tapenade's derivative of the limited transfer matches the analytic
+implicit-function derivative at every activation tested.
 Upward transfers need no such limit: they are gradient limited, and the
 gradient changes only in response to evapotranspiration (ET) demand,
 which is never large.
@@ -616,7 +621,8 @@ stress regimes, lateral activity, theta_fc and theta_wp crossings,
 roundoff clamps, and the equal-head limit on downward transfers (how
 often it reduces a transfer, how often it sets one to zero, and how
 often a bisection step rather than a Newton step occurs in its last 5
-iterations).  `tools/run_branch_census.csh` runs it for a list of
+iterations, and how often its exact pre-screen returns the requested
+transfer without evaluating capillary heads).  `tools/run_branch_census.csh` runs it for a list of
 lateral rate constants:
 
 ``` bash

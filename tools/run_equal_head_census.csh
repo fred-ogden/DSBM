@@ -108,6 +108,8 @@ foreach parameter_set ( $parameter_sets:q )
     grep -A 3 "^eq_head_limited" $report >> $summary
     grep -A 3 "^eq_head_zero" $report >> $summary
     grep -A 1 "^eq_head_late_bisect" $report >> $summary
+    grep -A 1 "^eq_head_call" $report >> $summary
+    grep -A 1 "^eq_head_prescreen" $report >> $summary
 end
 
 cat $summary

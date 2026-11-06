@@ -71,8 +71,12 @@
                                             Newton step, in the last
                                             CENSUS_EQUAL_HEAD_LATE_ITERATIONS iterations */
 #define CENSUS_EQUAL_HEAD_LATE_ITERATIONS 5
+#define CENSUS_EQUAL_HEAD_CALL      29   /* limiter called with a positive requested transfer */
+#define CENSUS_EQUAL_HEAD_PRESCREEN 30   /* ... and the exact pre-screen returned it unchanged
+                                            (upper disc at least as wet as lower after transfer),
+                                            so no psi_from_theta() calls were needed */
 
-#define CENSUS_N_EVENTS             29
+#define CENSUS_N_EVENTS             31
 
 /*
  * The hook supplies its own semicolon and is written in the kernel

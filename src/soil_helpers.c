@@ -328,69 +328,85 @@ double limit_downward_transfer_to_equal_head(double transfer_requested_m,
     if (transfer_requested_m > 0.0) {
         theta_upper_after = theta_upper - transfer_requested_m / dz_upper_m;
         theta_lower_after = theta_lower + transfer_requested_m / dz_lower_m;
-        psi_upper_m = psi_from_theta(theta_upper_after, theta_sat, phi_sat_cm, b_exp);
-        psi_lower_m = psi_from_theta(theta_lower_after, theta_sat, phi_sat_cm, b_exp);
-
-        // FLO 10/26: Logarithms preserve the order of positive heads, so
-        // compare heads directly on the common path.  Evaluate logarithms
-        // only inside Newton when the requested transfer overshoots.
-        if (psi_upper_m > psi_lower_m + distance_between_centers_m) {
-            psi_upper_m = psi_from_theta(theta_upper, theta_sat, phi_sat_cm, b_exp);
-            psi_lower_m = psi_from_theta(theta_lower, theta_sat, phi_sat_cm, b_exp);
-
-            if (psi_upper_m >= psi_lower_m + distance_between_centers_m) {
-                limited_transfer_m = 0.0;
-            } else {
-                transfer_low_m = 0.0;
-                transfer_high_m = transfer_requested_m;
-                transfer_m = 0.5 * transfer_requested_m;
-                for (iteration = 0; iteration < EQUAL_HEAD_LIMIT_ITERATIONS; iteration++) {
-                    theta_upper_after = theta_upper - transfer_m / dz_upper_m;
-                    theta_lower_after = theta_lower + transfer_m / dz_lower_m;
-                    psi_upper_m = psi_from_theta(theta_upper_after, theta_sat, phi_sat_cm, b_exp);
-                    psi_lower_m = psi_from_theta(theta_lower_after, theta_sat, phi_sat_cm, b_exp);
-                    log_head_difference = log(psi_upper_m) - log(psi_lower_m + distance_between_centers_m);
-
-                    if (log_head_difference < 0.0) {
-                        transfer_low_m = transfer_m;
-                    } else {
-                        transfer_high_m = transfer_m;
-                    }
-
-                    log_head_difference_slope = 0.0;
-                    if (theta_upper_after > THETA_MIN && theta_upper_after < theta_sat) {
-                        log_head_difference_slope += b_exp / (theta_upper_after * dz_upper_m);
-                    }
-                    if (theta_lower_after > THETA_MIN && theta_lower_after < theta_sat) {
-                        log_head_difference_slope += b_exp * psi_lower_m /
-                            (theta_lower_after * dz_lower_m * (psi_lower_m + distance_between_centers_m));
-                    }
-
-                    transfer_new_m = 0.5 * (transfer_low_m + transfer_high_m);
-                    if (log_head_difference_slope > 0.0) {
-                        transfer_new_m = transfer_m - log_head_difference / log_head_difference_slope;
-                        if (transfer_new_m < transfer_low_m || transfer_new_m > transfer_high_m) {
-                            transfer_new_m = 0.5 * (transfer_low_m + transfer_high_m);
+        // FLO 11/06/2026: Exact pre-screen, which avoids the two pow()
+        // calls of the overshoot test on the common path.  psi decreases
+        // monotonically with theta (also through the THETA_MIN and
+        // theta_sat clamps of psi_from_theta()), so if the upper disc is
+        // at least as wet as the lower disc after the requested transfer,
+        // then psi_upper <= psi_lower < psi_lower + dz_int: the transfer
+        // cannot overshoot equal head and is returned unchanged.  The
+        // result is identical to that of the overshoot test.
 #ifdef DSBM_CENSUS_BUILD
-                            // census only: Newton step rejected late in the iteration
-                            if (iteration >= EQUAL_HEAD_LIMIT_ITERATIONS - CENSUS_EQUAL_HEAD_LATE_ITERATIONS) {
-                                DSBM_CENSUS(CENSUS_EQUAL_HEAD_LATE_BISECTION, 0)
-                            }
+        DSBM_CENSUS(CENSUS_EQUAL_HEAD_CALL, 0)
+        if (!(theta_upper_after < theta_lower_after)) {
+            DSBM_CENSUS(CENSUS_EQUAL_HEAD_PRESCREEN, 0)
+        }
 #endif
+        if (theta_upper_after < theta_lower_after) {
+            psi_upper_m = psi_from_theta(theta_upper_after, theta_sat, phi_sat_cm, b_exp);
+            psi_lower_m = psi_from_theta(theta_lower_after, theta_sat, phi_sat_cm, b_exp);
+
+            // FLO 10/26: Logarithms preserve the order of positive heads, so
+            // compare heads directly on the common path.  Evaluate logarithms
+            // only inside Newton when the requested transfer overshoots.
+            if (psi_upper_m > psi_lower_m + distance_between_centers_m) {
+                psi_upper_m = psi_from_theta(theta_upper, theta_sat, phi_sat_cm, b_exp);
+                psi_lower_m = psi_from_theta(theta_lower, theta_sat, phi_sat_cm, b_exp);
+
+                if (psi_upper_m >= psi_lower_m + distance_between_centers_m) {
+                    limited_transfer_m = 0.0;
+                } else {
+                    transfer_low_m = 0.0;
+                    transfer_high_m = transfer_requested_m;
+                    transfer_m = 0.5 * transfer_requested_m;
+                    for (iteration = 0; iteration < EQUAL_HEAD_LIMIT_ITERATIONS; iteration++) {
+                        theta_upper_after = theta_upper - transfer_m / dz_upper_m;
+                        theta_lower_after = theta_lower + transfer_m / dz_lower_m;
+                        psi_upper_m = psi_from_theta(theta_upper_after, theta_sat, phi_sat_cm, b_exp);
+                        psi_lower_m = psi_from_theta(theta_lower_after, theta_sat, phi_sat_cm, b_exp);
+                        log_head_difference = log(psi_upper_m) - log(psi_lower_m + distance_between_centers_m);
+
+                        if (log_head_difference < 0.0) {
+                            transfer_low_m = transfer_m;
+                        } else {
+                            transfer_high_m = transfer_m;
                         }
+
+                        log_head_difference_slope = 0.0;
+                        if (theta_upper_after > THETA_MIN && theta_upper_after < theta_sat) {
+                            log_head_difference_slope += b_exp / (theta_upper_after * dz_upper_m);
+                        }
+                        if (theta_lower_after > THETA_MIN && theta_lower_after < theta_sat) {
+                            log_head_difference_slope += b_exp * psi_lower_m /
+                                (theta_lower_after * dz_lower_m * (psi_lower_m + distance_between_centers_m));
+                        }
+
+                        transfer_new_m = 0.5 * (transfer_low_m + transfer_high_m);
+                        if (log_head_difference_slope > 0.0) {
+                            transfer_new_m = transfer_m - log_head_difference / log_head_difference_slope;
+                            if (transfer_new_m < transfer_low_m || transfer_new_m > transfer_high_m) {
+                                transfer_new_m = 0.5 * (transfer_low_m + transfer_high_m);
+    #ifdef DSBM_CENSUS_BUILD
+                                // census only: Newton step rejected late in the iteration
+                                if (iteration >= EQUAL_HEAD_LIMIT_ITERATIONS - CENSUS_EQUAL_HEAD_LATE_ITERATIONS) {
+                                    DSBM_CENSUS(CENSUS_EQUAL_HEAD_LATE_BISECTION, 0)
+                                }
+    #endif
+                            }
+                        }
+    #ifdef DSBM_CENSUS_BUILD
+                        // census only: no Newton step possible late in the iteration
+                        if (!(log_head_difference_slope > 0.0) &&
+                            iteration >= EQUAL_HEAD_LIMIT_ITERATIONS - CENSUS_EQUAL_HEAD_LATE_ITERATIONS) {
+                            DSBM_CENSUS(CENSUS_EQUAL_HEAD_LATE_BISECTION, 0)
+                        }
+    #endif
+                        transfer_m = transfer_new_m;
                     }
-#ifdef DSBM_CENSUS_BUILD
-                    // census only: no Newton step possible late in the iteration
-                    if (!(log_head_difference_slope > 0.0) &&
-                        iteration >= EQUAL_HEAD_LIMIT_ITERATIONS - CENSUS_EQUAL_HEAD_LATE_ITERATIONS) {
-                        DSBM_CENSUS(CENSUS_EQUAL_HEAD_LATE_BISECTION, 0)
-                    }
-#endif
-                    transfer_m = transfer_new_m;
+                    limited_transfer_m = transfer_m;
+                    if (limited_transfer_m > transfer_requested_m) limited_transfer_m = transfer_requested_m;
+                    if (limited_transfer_m < 0.0) limited_transfer_m = 0.0;
                 }
-                limited_transfer_m = transfer_m;
-                if (limited_transfer_m > transfer_requested_m) limited_transfer_m = transfer_requested_m;
-                if (limited_transfer_m < 0.0) limited_transfer_m = 0.0;
             }
         }
     }
