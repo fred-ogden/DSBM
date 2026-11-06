@@ -2,7 +2,7 @@
 
 The two primal wrappers exercise different differentiation paths:
 
-- `tapenade_soil_cost_primal.c` computes a one-year DSBM twin-experiment cost function (normalized squared errors in hourly lateral flow and percolation). Tapenade differentiates it with respect to lateral-flow coefficient `klf_m_per_h`, percolation limiter, saturated conductivity `K_sat_cm_per_h`, and Clapp-Hornberger exponent `b_exp`. The Ksat-to-saturated-capillary-head regression and derived field capacity and wilting point are **inside** the differentiated calculation. Both model and synthetic-observation routines explicitly enable the equal-head limiter.
+- `tapenade_soil_cost_primal.c` computes a one-year DSBM twin-experiment cost function (normalized squared errors in hourly lateral flow and percolation). Tapenade differentiates it with respect to lateral-flow coefficient `klf_m_per_h`, percolation limiter, saturated conductivity `K_sat_cm_per_h`, and Clapp-Hornberger exponent `b_exp`. The Ksat-to-saturated-capillary-head regression and derived field capacity and wilting point are **inside** the differentiated calculation. The equal-head limiter on downward transfers is always active in the kernel, so both the model and the synthetic observations use it.
 - `equal_head_ad_primal.c` isolates a downward transfer of 0.015 m from an initially wetter upper disc. The limiter is active, and Tapenade differentiates its Newton solver with respect to `b_exp`. This checks the actual active branch rather than relying on it to occur during a longer simulation.
 
 ## One-command validation

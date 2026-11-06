@@ -85,7 +85,22 @@ Each hourly timestep is divided into substeps (4 by default; see
 [Substeps per timestep](#substeps-per-timestep)). Within a substep the
 transfers between discs are capped by the soil moisture available in the
 donor disc and the storage available in the receiving discs, which keeps
-the solution stable and mass-conserving.
+the solution stable and volume-conserving.
+
+A downward transfer is also limited so that it cannot overshoot equal
+total hydraulic head between the two discs, that is, so that afterwards
+`psi_upper - psi_lower` is not less than the distance between the disc
+centers.  Without this limit an explicit transfer could empty an upper
+disc past equal head, which is physically impossible and produced a
+persistent two-substep wet/dry numerical oscillation.  The limit is
+always applied (there is no option to turn it off).  It is rarely
+active in the 78168-hour example record.  The
+limited transfer is found by a safeguarded Newton iteration with a fixed
+iteration count, so that Tapenade can differentiate it
+(`limit_downward_transfer_to_equal_head()` in `src/soil_helpers.c`).
+Upward transfers need no such limit: they are gradient limited, and the
+gradient changes only in response to evapotranspiration (ET) demand,
+which is never large.
 
 An optional lookup table can be used for the Clapp-Hornberger hydraulic
 functions.
@@ -325,7 +340,7 @@ Three defaults have changed since commit `1a8d1e2`: the DSBM substep
 count (fixed at 4, previously adaptive), the DSBM lateral removal (exact
 exponential, previously forward Euler), and the wilting point (computed
 at 15 atmospheres, previously fixed at 0.10, for both DSBM and Noah-MP).
-The original behavior is still available.  Add this line to the config
+The original choices are still available.  Add this line to the config
 file:
 
 ``` text
@@ -338,13 +353,15 @@ and, for DSBM runs, these options:
 --nsub 0 --lateral-forward-euler
 ```
 
-The output then matches the code at commit `1a8d1e2` byte for byte:
-theta, flux, and volume-balance time series, and the summary file apart
-from its wall-clock time line.  The screen output also matches apart
-from one added first line reporting the wilting point.  This has been
-checked for DSBM with the lookup table and with the analytic functions,
-each with and without `--apply-fc-perc-threshold`, and for Noah-MP with
-and without it.
+Before the equal-head limit on downward transfers was added, the output
+then matched the code at commit `1a8d1e2` byte for byte (theta, flux,
+and volume-balance time series, and the summary file apart from its
+wall-clock time line), checked for DSBM with the lookup table and with
+the analytic functions, each with and without
+`--apply-fc-perc-threshold`.  The equal-head limit is now always
+applied and cannot be turned off, so DSBM output differs from commit
+`1a8d1e2` in the few hours in which the limit is active and in the
+hours that follow them.
 
 ## Driver examples
 

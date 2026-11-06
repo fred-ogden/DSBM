@@ -41,13 +41,14 @@ extern "C" {
 #define N_SUB_SETTING_DEFAULT     0   // use N_SUB_DEFAULT_COUNT
 #define N_SUB_SETTING_ADAPTIVE   (-1) // original adaptive substep choice
 
-// FLO 10/26: The explicit downward Darcy-Buckingham transfer could overshoot
-// equal total hydraulic head, emptying an upper disc and producing a persistent
-// two-substep wet/dry oscillation.  Select the equal-head limiter by default;
-// retain the unlimited scheme to reproduce legacy calculations.
-// Value 0 makes the corrected scheme the default for zero-initialized controls.
-#define DOWNWARD_TRANSFER_EQUAL_HEAD_LIMIT  0
-#define DOWNWARD_TRANSFER_UNLIMITED         1
+// Downward Darcy-Buckingham transfers between discs are always limited so
+// that they cannot overshoot equal total hydraulic head (see
+// limit_downward_transfer_to_equal_head() in soil_helpers.c).  FLO 11/06/2026:
+// the unlimited scheme was removed; it is a bug that produces physically
+// impossible behavior (an upper disc emptied past equal head) and a
+// persistent two-substep wet/dry numerical oscillation.  Upward transfers
+// need no such limit: they are gradient limited, and their gradient changes
+// only in response to ET demand, which is never large.
 
 typedef struct {
     int    ndisc;                 // must equal NDISC
@@ -61,10 +62,6 @@ typedef struct {
     int    substep_lateral_severity; // adaptive only: 1 => also consider lateral removal rate
     int    lateral_scheme;        // LATERAL_SCHEME_EXPONENTIAL (0, default) or
                                   // LATERAL_SCHEME_FORWARD_EULER (1)
-    // FLO 10/26: Select the downward inter-disc transfer limiter; the
-    // equal-head default prevents numerical overshoot and oscillation.
-    int    downward_transfer_scheme; // DOWNWARD_TRANSFER_EQUAL_HEAD_LIMIT (0, default)
-                                     // or DOWNWARD_TRANSFER_UNLIMITED (1, legacy)
     double dt_hours;              // usually 1.0
 } SoilControl;
 

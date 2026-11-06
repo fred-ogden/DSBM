@@ -204,11 +204,8 @@ void dsbm_soil_cost_from_params(double klf_m_per_h,
     ctrl.n_sub_minimum = 0;
     ctrl.substep_lateral_severity = 0;
     ctrl.lateral_scheme = LATERAL_SCHEME_EXPONENTIAL;
-
-    // FLO 10/26: Explicitly enable the equal-head limiter in the Tapenade
-    // primal model.  This field was previously uninitialized, so derivative
-    // tests could select the legacy scheme unpredictably.
-    ctrl.downward_transfer_scheme = DOWNWARD_TRANSFER_EQUAL_HEAD_LIMIT;
+    // The equal-head limiter on downward transfers is always active in the
+    // kernel (FLO 11/06/2026: no selection field remains).
 
     geom.dz[0] = 0.10;
     geom.dz[1] = 0.30;
@@ -316,10 +313,8 @@ void dsbm_soil_series_from_params(double klf_m_per_h,
     ctrl.n_sub_minimum = 0;
     ctrl.substep_lateral_severity = 0;
     ctrl.lateral_scheme = LATERAL_SCHEME_EXPONENTIAL;
-
-    // FLO 10/26: Use the corrected equal-head limiter when generating
-    // synthetic observations, matching the differentiated primal model.
-    ctrl.downward_transfer_scheme = DOWNWARD_TRANSFER_EQUAL_HEAD_LIMIT;
+    // Same kernel, so the synthetic observations also use the equal-head
+    // limiter, matching the differentiated primal model.
 
     geom.dz[0] = 0.10;
     geom.dz[1] = 0.30;
