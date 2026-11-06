@@ -268,6 +268,7 @@ forward-Euler lateral sink, which is now Noah-MP fidelity 2 with
 |-- run_noahmp_fc_limit.csh              Noah-MP fidelity 2, field-capacity percolation threshold
 |-- run_noahmp_fidelity1.csh             Noah-MP fidelity 1, Noah-MP as written
 |-- tools/
+|   |-- check_regression.csh             byte-for-byte check against an earlier commit
 |   |-- run_branch_census.csh            branch-activity census
 |   `-- run_nsub_timing.csh              substep count versus cost and results
 `-- tapenade/                            automatic differentiation experiments
