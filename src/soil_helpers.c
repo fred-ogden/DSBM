@@ -371,8 +371,21 @@ double limit_downward_transfer_to_equal_head(double transfer_requested_m,
                         transfer_new_m = transfer_m - log_head_difference / log_head_difference_slope;
                         if (transfer_new_m < transfer_low_m || transfer_new_m > transfer_high_m) {
                             transfer_new_m = 0.5 * (transfer_low_m + transfer_high_m);
+#ifdef DSBM_CENSUS_BUILD
+                            // census only: Newton step rejected late in the iteration
+                            if (iteration >= EQUAL_HEAD_LIMIT_ITERATIONS - CENSUS_EQUAL_HEAD_LATE_ITERATIONS) {
+                                DSBM_CENSUS(CENSUS_EQUAL_HEAD_LATE_BISECTION, 0)
+                            }
+#endif
                         }
                     }
+#ifdef DSBM_CENSUS_BUILD
+                    // census only: no Newton step possible late in the iteration
+                    if (!(log_head_difference_slope > 0.0) &&
+                        iteration >= EQUAL_HEAD_LIMIT_ITERATIONS - CENSUS_EQUAL_HEAD_LATE_ITERATIONS) {
+                        DSBM_CENSUS(CENSUS_EQUAL_HEAD_LATE_BISECTION, 0)
+                    }
+#endif
                     transfer_m = transfer_new_m;
                 }
                 limited_transfer_m = transfer_m;

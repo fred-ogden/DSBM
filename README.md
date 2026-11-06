@@ -270,6 +270,7 @@ forward-Euler lateral sink, which is now Noah-MP fidelity 2 with
 |-- tools/
 |   |-- check_regression.csh             byte-for-byte check against an earlier commit
 |   |-- run_branch_census.csh            branch-activity census
+|   |-- run_equal_head_census.csh        equal-head limit census over soil parameter sets
 |   `-- run_nsub_timing.csh              substep count versus cost and results
 `-- tapenade/                            automatic differentiation experiments
     |-- initial/                         first one-timestep experiment
@@ -609,8 +610,11 @@ vary from run to run).
 kernel with counting hooks compiled in.  It reports how often each
 threshold, cap, and branch in the DSBM kernel is active over a run:
 Darcy-Buckingham flux direction and transfer caps, percolation cap, ET
-stress regimes, lateral activity, theta_fc and theta_wp crossings, and
-roundoff clamps.  `tools/run_branch_census.csh` runs it for a list of
+stress regimes, lateral activity, theta_fc and theta_wp crossings,
+roundoff clamps, and the equal-head limit on downward transfers (how
+often it reduces a transfer, how often it sets one to zero, and how
+often a bisection step rather than a Newton step occurs in its last 5
+iterations).  `tools/run_branch_census.csh` runs it for a list of
 lateral rate constants:
 
 ``` bash
@@ -618,8 +622,14 @@ make census
 tools/run_branch_census.csh 1e-3 1e-2
 ```
 
+`tools/run_equal_head_census.csh` runs it for a list of
+(k_lf, perc_limiter, Ksat, b) sets, by default the config values and
+the corners of the bounds used by the E10 calibration, and summarizes
+the equal-head lines in `output/equal_head_census/summary.txt`.
+
 In the normal build the hooks expand to nothing, so the production
-kernel is unchanged.
+kernel is unchanged (its object files are identical with and without
+the hooks).
 
 ## Differentiability (Tapenade experiments)
 

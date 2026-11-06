@@ -67,7 +67,10 @@ static const CensusEventInfo census_event_info[CENSUS_N_EVENTS] = {
     {"et_capped",         "AET limited by water above theta_wp",            PER_ROOT_DISC_SUB, 1},
     {"lat_active",        "disc above theta_fc at lateral step",            PER_DISC_SUB,      1},
     {"lat_euler_cap",     "forward-Euler lateral limited (legacy only)",    PER_DISC_SUB,      1},
-    {"safety_clamp",      "end-of-substep safety clamp changed theta",      PER_DISC_SUB,      1}
+    {"safety_clamp",      "end-of-substep safety clamp changed theta",      PER_DISC_SUB,      1},
+    {"eq_head_limited",   "downward transfer reduced by equal-head limit",  PER_INTERFACE_SUB, 1},
+    {"eq_head_zero",      "equal-head limit set downward transfer to 0",    PER_INTERFACE_SUB, 1},
+    {"eq_head_late_bisect", "bisection step in last 5 limiter iterations (count, not %)", PER_SUBSTEP, 0}
 };
 
 static long long census_count[CENSUS_N_EVENTS][CENSUS_MAX_INDEX];

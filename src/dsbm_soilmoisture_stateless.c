@@ -246,6 +246,9 @@ int soil_step_one_hour_stateless(
     double max_out;              // most the donor may send (m)
     double need;                 // requested upward volume (m)
     double move;                 // upward volume applied (m)
+#ifdef DSBM_CENSUS_BUILD
+    double V_before_equal_head_limit_m;  // census only: downward volume before the limit (m)
+#endif
 
     // ---- D10 ET ----
     int nroot;                   // number of root-zone discs
@@ -497,10 +500,21 @@ int soil_step_one_hour_stateless(
                 // downward transfers to equal head, after the storage
                 // caps above.  FLO 11/06/2026: always applied; the
                 // unlimited scheme was a bug and has been removed.
+#ifdef DSBM_CENSUS_BUILD
+                V_before_equal_head_limit_m = V;
+#endif
                 V = limit_downward_transfer_to_equal_head(V, theta[i], theta[i+1],
                                                           geom->dz[i], geom->dz[i+1],
                                                           par->theta_sat, par->phi_sat_cm,
                                                           par->b_exp);
+#ifdef DSBM_CENSUS_BUILD
+                if (V < V_before_equal_head_limit_m) {
+                    DSBM_CENSUS(CENSUS_EQUAL_HEAD_LIMITED, i)
+                    if (V <= 0.0) {
+                        DSBM_CENSUS(CENSUS_EQUAL_HEAD_ZERO, i)
+                    }
+                }
+#endif
 
                 theta[i]   -= V / geom->dz[i];
                 theta[i+1] += V / geom->dz[i+1];

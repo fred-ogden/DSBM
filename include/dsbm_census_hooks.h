@@ -63,7 +63,16 @@
 /* ---- end-of-substep safety clamp, per disc ---- */
 #define CENSUS_SAFETY_CLAMP         25   /* theta changed by the floor/saturation safety clamp */
 
-#define CENSUS_N_EVENTS             26
+/* ---- equal-head limit on downward transfers (FLO 11/06/2026) ---- */
+#define CENSUS_EQUAL_HEAD_LIMITED   26   /* per interface: limit reduced the downward transfer */
+#define CENSUS_EQUAL_HEAD_ZERO      27   /* per interface: limit set the downward transfer to 0
+                                            (already at or past equal head before transfer) */
+#define CENSUS_EQUAL_HEAD_LATE_BISECTION 28 /* per limiter iteration: a bisection step, not a
+                                            Newton step, in the last
+                                            CENSUS_EQUAL_HEAD_LATE_ITERATIONS iterations */
+#define CENSUS_EQUAL_HEAD_LATE_ITERATIONS 5
+
+#define CENSUS_N_EVENTS             29
 
 /*
  * The hook supplies its own semicolon and is written in the kernel
