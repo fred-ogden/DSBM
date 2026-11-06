@@ -19,7 +19,7 @@ The script exits **0** only if all checks pass. A nonzero exit indicates a build
 
 ## Interpretation
 
-E10a compares all four cost-function derivatives from tangent and reverse mode at 4 and 12 substeps and tests four directional dot products at each substep count. Acceptance requires relative differences below `1e-9`. E10b compares adjoint gradients with central finite differences across five relative step sizes; at least one step must give relative error below `1e-5` for each parameter. The finite-difference error need not decrease monotonically: large steps have truncation error; small steps can encounter roundoff or branch changes.
+E10a compares all five cost-function derivatives (k_lf, perc_limiter, Ksat, b, and the effective porosity theta_sat, active since FLO 11/06/2026 because the dry-end soil moisture limit 0.03 theta_sat depends on it) from tangent and reverse mode at 4 and 12 substeps and tests five directional dot products at each substep count. E10d still calibrates the first four, with theta_sat at its known value. Acceptance requires relative differences below `1e-9`. E10b compares adjoint gradients with central finite differences across five relative step sizes; at least one step must give relative error below `1e-5` for each parameter. The finite-difference error need not decrease monotonically: large steps have truncation error; small steps can encounter roundoff or branch changes.
 
 The isolated test requires the limited transfer to lie strictly between zero and 0.015 m, an equal-total-head residual below `1e-8` m, a tangent/finite-difference relative error below `1e-7` at one tested step, and tangent/adjoint agreement within `1e-10` relative error.
 

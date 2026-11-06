@@ -53,7 +53,7 @@ set gen_b = $work_dir/generated_b
 set results_dir = output/tapenade_soil_params
 set exe = bin/tapenade_soil_params_test
 set head_function = dsbm_soil_cost_from_params
-set head_spec = "dsbm_soil_cost_from_params(cost_function_value)/(klf_m_per_h perc_limiter_0_to_1 K_sat_cm_per_h b_exp)"
+set head_spec = "dsbm_soil_cost_from_params(cost_function_value)/(klf_m_per_h perc_limiter_0_to_1 K_sat_cm_per_h b_exp theta_sat)"
 set sources = "tapenade_soil_cost_primal.c dsbm_soilmoisture_stateless.c soil_helpers.c"
 
 set cflags = "-std=c11 -O2 -Wall -Wextra -DNDISC=$ndisc"

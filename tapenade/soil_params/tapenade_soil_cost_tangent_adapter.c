@@ -13,6 +13,7 @@
  *       double perc_limiter_0_to_1, double perc_limiter_0_to_1d,
  *       double K_sat_cm_per_h, double K_sat_cm_per_hd,
  *       double b_exp, double b_expd,
+ *       double theta_sat, double theta_satd,
  *       const double *theta_in, int n_steps,
  *       int n_sub_setting, [int n_sub_settingd,]
  *       const double *rain_mm_per_h, const double *pet_mm_per_h,
@@ -25,15 +26,16 @@
  * derivative; 0 is passed).
  *
  * One tangent call gives the directional derivative of the cost function
- * along the seed vector (klf, perc_limiter, Ksat, b), in physical units.
+ * along the seed vector (klf, perc_limiter, Ksat, b, theta_sat), in
+ * physical units.
  *
  * ASCII only.
  */
 
 #include "tapenade_soil_cost_primal_d.c"
 
-void soil_cost_tangent_from_tapenade(const double parameters[4],
-                                     const double seed[4],
+void soil_cost_tangent_from_tapenade(const double parameters[5],
+                                     const double seed[5],
                                      const double *theta_in,
                                      int n_steps,
                                      int n_sub_setting,
@@ -54,6 +56,7 @@ void soil_cost_tangent_from_tapenade(const double parameters[4],
                                  parameters[1], seed[1],
                                  parameters[2], seed[2],
                                  parameters[3], seed[3],
+                                 parameters[4], seed[4],
                                  (double *)theta_in, n_steps,
                                  n_sub_setting,
 #ifdef SOIL_COST_TANGENT_HAS_NSUB_SLOT

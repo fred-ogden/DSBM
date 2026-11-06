@@ -22,14 +22,15 @@ def full(path):
     require("E10b ADJOINT versus CENTRAL FINITE DIFFERENCES" in text, "E10b missing")
     a = text.split("E10a ADJOINT versus TANGENT", 1)[1].split("E10b ADJOINT", 1)[0]
     rows = re.findall(r"^dcost/d\S+\s+([+-]?[\d.eE+-]+)\s+([+-]?[\d.eE+-]+)\s+([\d.eE+-]+)", a, re.M)
-    require(len(rows) == 8, f"expected 8 E10a parameter comparisons, found {len(rows)}")
+    # FLO 11/06/2026: five active parameters (theta_sat added), two substep counts
+    require(len(rows) == 10, f"expected 10 E10a parameter comparisons, found {len(rows)}")
     require(all(math.isfinite(float(row[2])) and float(row[2]) < 1e-9 for row in rows), "E10a tangent/adjoint mismatch")
-    dots = re.findall(r"^\s+v[1-4]:.*?rel diff\s+([\d.eE+-]+)", a, re.M)
-    require(len(dots) == 8, f"expected 8 E10a dot products, found {len(dots)}")
+    dots = re.findall(r"^\s+v[1-5]:.*?rel diff\s+([\d.eE+-]+)", a, re.M)
+    require(len(dots) == 10, f"expected 10 E10a dot products, found {len(dots)}")
     require(all(math.isfinite(float(x)) and float(x) < 1e-9 for x in dots), "E10a dot-product mismatch")
     b = text.split("E10b ADJOINT versus CENTRAL FINITE DIFFERENCES", 1)[1]
     blocks = re.findall(r"dcost/d\S+\s+adjoint[^\n]*\n(.*?)(?=\ndcost/d|\nLarge steps:|\Z)", b, re.S)
-    require(len(blocks) == 4, f"expected four E10b parameter blocks, found {len(blocks)}")
+    require(len(blocks) == 5, f"expected five E10b parameter blocks, found {len(blocks)}")
     for i, block in enumerate(blocks):
         matches = re.findall(r"^\s+1e-0[2-6]\s+[+-]?[\d.eE+-]+\s+([\d.eE+-]+)\s*$", block, re.M)
         require(len(matches) == 5, f"E10b parameter {i+1}: expected five FD steps")

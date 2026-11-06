@@ -3,11 +3,17 @@
  *
  * Primal (undifferentiated) cost-function wrapper for the E10 Tapenade
  * experiments: four calibration parameters, two of them soil hydraulic
- * properties.
+ * properties, plus the effective porosity theta_e (theta_sat in the
+ * code), which is active for the derivative checks (E10a-E10c) but held
+ * at its known value in the BFGS calibration (E10d).  FLO 11/06/2026:
+ * theta_sat was added because the dry-end soil moisture limit
+ * (CH_SCALED_SOIL_MOISTURE_MIN theta_sat, soil_config.h) depends on it,
+ * and CFE3.1 calibrates effective porosity.
  *
  * Head function handed to Tapenade:
  *
  *   independents:  klf_m_per_h  perc_limiter_0_to_1  K_sat_cm_per_h  b_exp
+ *                  theta_sat
  *   dependent:     cost_function_value
  *
  * phi_sat is NOT a calibration parameter.  It is computed from Ksat inside
@@ -34,12 +40,14 @@
  *   Ksat -> K(theta)                                    (direct)
  *   Ksat -> phi_sat -> psi(theta), theta_fc, theta_wp   (through the regression)
  *   b    -> psi(theta), K(theta), theta_fc, theta_wp
+ *   theta_sat -> psi(theta), K(theta), theta_fc, theta_wp, storage caps,
+ *                dry-end floor
  *
  * The cost function is the E8 one: SSE_lateral/SST_lateral +
  * SSE_percolation/SST_percolation (sum of 1 - NSE for hourly lateral flow
  * and percolation).  This is a twin experiment that tests the derivative
- * machinery only: the "observations" are DSBM's own outputs at known true
- * parameter values.  It says nothing about whether these parameters are
+ * machinery only: the "observations" are DSBM's own outputs at known
+ * parameter values (the reference series).  It says nothing about whether these parameters are
  * identifiable from discharge at a gauge, which needs CFE3.1 plus routing.
  *
  * Design rules carried over from E8: active parameters are plain scalar
@@ -66,7 +74,6 @@
 #include "dsbm_soilmoisture_stateless.h"
 
 
-#define SOIL_COST_THETA_SAT                 0.439
 #define SOIL_COST_FC_PRESSURE_RATIO         0.333
 #define SOIL_COST_WP_PRESSURE_RATIO         15.0    /* CFE3.1 WILTING_POINT_PCAP_OVER_PATM */
 #define SOIL_COST_ATM_PRESSURE_HEAD_CM      1033.2274528
@@ -153,6 +160,7 @@ double soil_cost_theta_wp(double theta_sat, double phi_sat_cm, double b_exp)
  *   perc_limiter_0_to_1      ACTIVE: percolation limiter (-)
  *   K_sat_cm_per_h           ACTIVE: saturated hydraulic conductivity (cm/h)
  *   b_exp                    ACTIVE: Clapp-Hornberger pore-size exponent (-)
+ *   theta_sat                ACTIVE: effective porosity theta_e (m3/m3)
  *   theta_in[NDISC]          passive: entering soil moisture (m3/m3)
  *   n_steps                  passive: number of hourly timesteps
  *   n_sub_setting            passive: substeps (see header comment)
@@ -170,6 +178,7 @@ void dsbm_soil_cost_from_params(double klf_m_per_h,
                                 double perc_limiter_0_to_1,
                                 double K_sat_cm_per_h,
                                 double b_exp,
+                                double theta_sat,
                                 const double *theta_in,
                                 int n_steps,
                                 int n_sub_setting,
@@ -224,7 +233,7 @@ void dsbm_soil_cost_from_params(double klf_m_per_h,
     geom.zc_m[3] = 1.50;
 
     params.theta_r = 0.0;
-    params.theta_sat = SOIL_COST_THETA_SAT;
+    params.theta_sat = theta_sat;
     params.K_sat_cm_per_h = K_sat_cm_per_h;
     params.phi_sat_cm = soil_cost_phi_sat_cm_from_ksat(K_sat_cm_per_h);
     params.b_exp = b_exp;
@@ -289,6 +298,7 @@ void dsbm_soil_series_from_params(double klf_m_per_h,
                                   double perc_limiter_0_to_1,
                                   double K_sat_cm_per_h,
                                   double b_exp,
+                                  double theta_sat,
                                   const double *theta_in,
                                   int n_steps,
                                   int n_sub_setting,
@@ -333,7 +343,7 @@ void dsbm_soil_series_from_params(double klf_m_per_h,
     geom.zc_m[3] = 1.50;
 
     params.theta_r = 0.0;
-    params.theta_sat = SOIL_COST_THETA_SAT;
+    params.theta_sat = theta_sat;
     params.K_sat_cm_per_h = K_sat_cm_per_h;
     params.phi_sat_cm = soil_cost_phi_sat_cm_from_ksat(K_sat_cm_per_h);
     params.b_exp = b_exp;

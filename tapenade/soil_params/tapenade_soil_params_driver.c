@@ -1,9 +1,17 @@
 /*
  * tapenade_soil_params_driver.c
  *
- * E10: four calibration parameters, two of them soil hydraulic properties.
+ * E10: four calibration parameters, two of them soil hydraulic properties,
+ * plus the effective porosity theta_e (theta_sat in the code).
  *
- *   parameters p = (k_lf (m/h), perc_limiter (-), Ksat (cm/h), b (-))
+ *   parameters p = (k_lf (m/h), perc_limiter (-), Ksat (cm/h), b (-),
+ *                   theta_sat (m3/m3))
+ *
+ * FLO 11/06/2026: theta_sat is active in E10a-E10c, because the dry-end
+ * soil moisture limit (CH_SCALED_SOIL_MOISTURE_MIN theta_sat,
+ * soil_config.h) depends on it and CFE3.1 calibrates effective porosity.
+ * E10d still calibrates the first four parameters only, with theta_sat
+ * at its known value.
  *
  * phi_sat is computed from Ksat inside the differentiated code with the
  * CFE3.1 regression phi_sat(cm) = 10.415 Ksat(cm/h)^(-0.3266), and theta_fc
@@ -12,22 +20,24 @@
  * tapenade_soil_cost_primal.c.
  *
  * TWIN EXPERIMENT: the "observations" are DSBM's own hourly lateral flow
- * and percolation at the true parameters, so these experiments test the
+ * and percolation at the known parameters (the reference series), so these
+ * experiments test the
  * derivative machinery (Tapenade tangent and adjoint through the
  * Ksat -> phi_sat -> theta_fc, theta_wp chain and the moving
  * thresholds), not
  * whether the parameters are identifiable from discharge at a gauge.
  *
- *   E10a  Adjoint gradient against tangent gradient (four tangent runs)
+ *   E10a  Adjoint gradient against tangent gradient (five tangent runs)
  *         at the test point, fixed 4 and 12 substeps, plus the
  *         dot-product test w * (J v) = (J^T w) . v.
  *   E10b  Adjoint gradient against central finite differences for a
  *         range of step sizes (first time theta_fc moves with the
  *         parameters).
  *   E10c  Run time: primal, one tangent direction, full tangent gradient
- *         (four runs), adjoint (one run); adjoint memory for 1 year.
+ *         (five runs), adjoint (one run); adjoint memory for 1 year.
  *   E10d  BFGS calibration over u = (ln k_lf, perc_limiter, ln Ksat, b)
- *         with the adjoint gradient and with the tangent gradient.
+ *         with the adjoint gradient and with the tangent gradient
+ *         (theta_sat held at its known value).
  *         Ksat is treated as a logarithmic variable, as is usual in soil
  *         science, and k_lf as in E8/E9.
  *
@@ -62,6 +72,7 @@ void dsbm_soil_cost_from_params(double klf_m_per_h,
                                 double perc_limiter_0_to_1,
                                 double K_sat_cm_per_h,
                                 double b_exp,
+                                double theta_sat,
                                 const double *theta_in,
                                 int n_steps,
                                 int n_sub_setting,
@@ -77,6 +88,7 @@ void dsbm_soil_series_from_params(double klf_m_per_h,
                                   double perc_limiter_0_to_1,
                                   double K_sat_cm_per_h,
                                   double b_exp,
+                                  double theta_sat,
                                   const double *theta_in,
                                   int n_steps,
                                   int n_sub_setting,
@@ -85,8 +97,8 @@ void dsbm_soil_series_from_params(double klf_m_per_h,
                                   double *lateral_series_m,
                                   double *percolation_series_m);
 
-void soil_cost_tangent_from_tapenade(const double parameters[4],
-                                     const double seed[4],
+void soil_cost_tangent_from_tapenade(const double parameters[5],
+                                     const double seed[5],
                                      const double *theta_in,
                                      int n_steps,
                                      int n_sub_setting,
@@ -99,7 +111,7 @@ void soil_cost_tangent_from_tapenade(const double parameters[4],
                                      double *cost_function_value,
                                      double *directional_derivative_of_cost);
 
-void soil_cost_adjoint_from_tapenade(const double parameters[4],
+void soil_cost_adjoint_from_tapenade(const double parameters[5],
                                      const double *theta_in,
                                      int n_steps,
                                      int n_sub_setting,
@@ -110,25 +122,27 @@ void soil_cost_adjoint_from_tapenade(const double parameters[4],
                                      double sst_lateral_m2,
                                      double sst_percolation_m2,
                                      double cost_adjoint_seed,
-                                     double gradient_of_cost[4]);
+                                     double gradient_of_cost[5]);
 
 
 /* ---- experiment constants ---- */
 
-#define N_PARAMETERS                4
+#define N_PARAMETERS                5   /* active: k_lf, perc_limiter, Ksat, b, theta_sat */
+#define N_CALIBRATED_PARAMETERS     4   /* E10d: k_lf, perc_limiter, Ksat, b */
+#define I_THETA_SAT                 4   /* index of theta_sat in p */
 #define MAX_HOURS                   80000
 #define HOURS_ONE_YEAR              8760
 #define N_SUB_FOR_OBSERVATIONS      4
 
-#define SOIL_THETA_SAT              0.439
 #define SOIL_DEPTH_M                2.0
 #define INITIAL_STORAGE_M           0.7843498367003
 
-/* true parameters: configs/soil_params.dat soil, E8 k_lf and perc_limiter */
-#define KLF_TRUE_M_PER_H            2.0e-3
-#define PERC_LIMITER_TRUE           0.5
-#define K_SAT_TRUE_CM_PER_H         1.2168
-#define B_EXP_TRUE                  4.05
+/* known parameters: configs/soil_params.dat soil, E8 k_lf and perc_limiter */
+#define KLF_KNOWN_M_PER_H           2.0e-3
+#define PERC_LIMITER_KNOWN          0.5
+#define K_SAT_KNOWN_CM_PER_H        1.2168
+#define B_EXP_KNOWN                 4.05
+#define THETA_SAT_KNOWN             0.439
 
 /* calibration bounds */
 #define KLF_LOWER_BOUND_M_PER_H     1.0e-5
@@ -141,12 +155,16 @@ void soil_cost_adjoint_from_tapenade(const double parameters[4],
 #define B_EXP_UPPER_BOUND           15.0
 
 static const double disc_center_depth_m[NDISC] = {0.05, 0.25, 0.70, 1.50};
-static const char *parameter_name[N_PARAMETERS] = {"k_lf", "perc_limiter", "Ksat", "b"};
-static const double parameter_truth[N_PARAMETERS] = {
-    KLF_TRUE_M_PER_H, PERC_LIMITER_TRUE, K_SAT_TRUE_CM_PER_H, B_EXP_TRUE};
+static const char *parameter_name[N_PARAMETERS] = {"k_lf", "perc_limiter", "Ksat", "b", "theta_sat"};
+static const double parameter_known[N_PARAMETERS] = {
+    KLF_KNOWN_M_PER_H, PERC_LIMITER_KNOWN, K_SAT_KNOWN_CM_PER_H, B_EXP_KNOWN, THETA_SAT_KNOWN};
 
-/* test point for E10a-E10c, and the BFGS start of E10d */
-static const double parameter_test_point[N_PARAMETERS] = {5.0e-4, 0.8, 3.0, 5.5};
+/* test point for E10a-E10c, and the BFGS start of E10d (whose theta_sat
+   is the known value, not the test-point value).  The test-point
+   theta_sat is above the known 0.439 because the initial soil moisture
+   is hydrostatic for the known soil: a smaller theta_sat would start the
+   wetter discs above saturation. */
+static const double parameter_test_point[N_PARAMETERS] = {5.0e-4, 0.8, 3.0, 5.5, 0.46};
 
 
 /* ---- forcing (whole record) and the calibration problem ---- */
@@ -246,9 +264,10 @@ static double sum_of_squared_deviations(const double *series, int n)
 }
 
 /*
- * Set up the synthetic-truth problem over the first n_hours of forcing.
- * The initial soil moisture is hydrostatic for the TRUE soil and is a
- * passive input: it does not change with the trial parameters.
+ * Set up the twin problem over the first n_hours of forcing.  The
+ * initial soil moisture is hydrostatic for the soil with the known
+ * parameters and is a passive input: it does not change with the trial
+ * parameters.
  */
 static void set_up_problem(int n_hours)
 {
@@ -258,13 +277,14 @@ static void set_up_problem(int n_hours)
     problem.rain_mm_per_h = all_rain_mm_per_h;
     problem.pet_mm_per_h = all_pet_mm_per_h;
 
-    initialize_hydrostatic_from_storage(SOIL_DEPTH_M, SOIL_THETA_SAT,
-                                        soil_cost_phi_sat_cm_from_ksat(K_SAT_TRUE_CM_PER_H),
-                                        B_EXP_TRUE, disc_center_depth_m, INITIAL_STORAGE_M,
+    initialize_hydrostatic_from_storage(SOIL_DEPTH_M, THETA_SAT_KNOWN,
+                                        soil_cost_phi_sat_cm_from_ksat(K_SAT_KNOWN_CM_PER_H),
+                                        B_EXP_KNOWN, disc_center_depth_m, INITIAL_STORAGE_M,
                                         &water_table_depth_m, problem.theta_in);
 
-    dsbm_soil_series_from_params(KLF_TRUE_M_PER_H, PERC_LIMITER_TRUE,
-                                 K_SAT_TRUE_CM_PER_H, B_EXP_TRUE, problem.theta_in,
+    dsbm_soil_series_from_params(KLF_KNOWN_M_PER_H, PERC_LIMITER_KNOWN,
+                                 K_SAT_KNOWN_CM_PER_H, B_EXP_KNOWN, THETA_SAT_KNOWN,
+                                 problem.theta_in,
                                  problem.n_steps, N_SUB_FOR_OBSERVATIONS,
                                  problem.rain_mm_per_h, problem.pet_mm_per_h,
                                  problem.observed_lateral_m, problem.observed_percolation_m);
@@ -280,7 +300,7 @@ static double cost_primal(const double p[N_PARAMETERS], int n_sub_setting)
 {
     double cost;
 
-    dsbm_soil_cost_from_params(p[0], p[1], p[2], p[3], problem.theta_in, problem.n_steps,
+    dsbm_soil_cost_from_params(p[0], p[1], p[2], p[3], p[4], problem.theta_in, problem.n_steps,
                                n_sub_setting, problem.rain_mm_per_h, problem.pet_mm_per_h,
                                problem.observed_lateral_m, problem.observed_percolation_m,
                                problem.sst_lateral_m2, problem.sst_percolation_m2, &cost);
@@ -346,11 +366,11 @@ static double relative_difference(double value, double reference)
 static void print_derived_soil(const char *label, const double p[N_PARAMETERS])
 {
     double phi_sat_cm = soil_cost_phi_sat_cm_from_ksat(p[2]);
-    double theta_fc = soil_cost_theta_fc(SOIL_THETA_SAT, phi_sat_cm, p[3]);
-    double theta_wp = soil_cost_theta_wp(SOIL_THETA_SAT, phi_sat_cm, p[3]);
+    double theta_fc = soil_cost_theta_fc(p[I_THETA_SAT], phi_sat_cm, p[3]);
+    double theta_wp = soil_cost_theta_wp(p[I_THETA_SAT], phi_sat_cm, p[3]);
 
-    printf("%s Ksat = %.4f cm/h, b = %.3f  ->  phi_sat = %.3f cm, theta_fc = %.4f, theta_wp = %.4f\n",
-           label, p[2], p[3], phi_sat_cm, theta_fc, theta_wp);
+    printf("%s Ksat = %.4f cm/h, b = %.3f, theta_sat = %.4f  ->  phi_sat = %.3f cm, theta_fc = %.4f, theta_wp = %.4f\n",
+           label, p[2], p[3], p[I_THETA_SAT], phi_sat_cm, theta_fc, theta_wp);
 }
 
 
@@ -359,11 +379,13 @@ static void print_derived_soil(const char *label, const double p[N_PARAMETERS])
 static void experiment_10a_adjoint_check(void)
 {
     const int n_sub_list[2] = {4, 12};
-    const double directions[4][N_PARAMETERS] = {
-        {1.0, 0.0, 0.0, 0.0},
-        {1.0e-3, 1.0, 0.1, 0.5},
-        {-2.0e-4, 0.3, -0.5, 1.0},
-        {0.0, 0.0, 1.0, -1.0}};
+    const int n_directions = 5;
+    const double directions[5][N_PARAMETERS] = {
+        {1.0, 0.0, 0.0, 0.0, 0.0},
+        {1.0e-3, 1.0, 0.1, 0.5, 0.01},
+        {-2.0e-4, 0.3, -0.5, 1.0, -0.02},
+        {0.0, 0.0, 1.0, -1.0, 0.0},
+        {0.0, 0.0, 0.0, 0.0, 1.0}};
     double adjoint_gradient[N_PARAMETERS];
     double tangent_gradient[N_PARAMETERS];
     double tangent_value;
@@ -373,12 +395,12 @@ static void experiment_10a_adjoint_check(void)
     int i_v;
 
     printf("====================================================================\n");
-    printf("E10a ADJOINT versus TANGENT, 4 parameters (1 year)\n");
+    printf("E10a ADJOINT versus TANGENT, 5 parameters (1 year)\n");
     printf("====================================================================\n");
     print_derived_soil("test point:", parameter_test_point);
     printf("            k_lf = %.1e m/h, perc_limiter = %.2f\n",
            parameter_test_point[0], parameter_test_point[1]);
-    print_derived_soil("truth:     ", parameter_truth);
+    print_derived_soil("known:     ", parameter_known);
 
     for (i_n = 0; i_n < 2; i_n++) {
         cost_gradient_adjoint(parameter_test_point, n_sub_list[i_n], adjoint_gradient);
@@ -392,7 +414,7 @@ static void experiment_10a_adjoint_check(void)
                    relative_difference(adjoint_gradient[i], tangent_gradient[i]));
         }
         printf("dot-product test, w = 1:  (J v)  versus  (J^T w) . v\n");
-        for (i_v = 0; i_v < 4; i_v++) {
+        for (i_v = 0; i_v < n_directions; i_v++) {
             tangent_value = cost_tangent_direction(parameter_test_point, n_sub_list[i_n],
                                                    directions[i_v]);
             adjoint_value = 0.0;
@@ -403,7 +425,8 @@ static void experiment_10a_adjoint_check(void)
                    adjoint_value, relative_difference(adjoint_value, tangent_value));
         }
     }
-    printf("(v1 = k_lf only; v2, v3 mixed; v4 = Ksat up and b down together)\n");
+    printf("(v1 = k_lf only; v2, v3 mixed; v4 = Ksat up and b down together;\n");
+    printf(" v5 = theta_sat only)\n");
 }
 
 
@@ -458,7 +481,7 @@ static void experiment_10c_timing(void)
     double best_primal = 1.0e30;
     double best_tangent = 1.0e30;
     double best_adjoint = 1.0e30;
-    double seed[N_PARAMETERS] = {1.0, 0.0, 0.0, 0.0};
+    double seed[N_PARAMETERS] = {1.0, 0.0, 0.0, 0.0, 0.0};
     double gradient[N_PARAMETERS];
     double t0;
     double elapsed;
@@ -489,12 +512,13 @@ static void experiment_10c_timing(void)
     printf("primal cost function            %9.4f s   (1.00 x primal)\n", best_primal);
     printf("tangent, one direction          %9.4f s   (%.2f x primal)\n", best_tangent,
            best_tangent / best_primal);
-    printf("tangent, whole gradient (4 runs)%9.4f s   (%.2f x primal)\n", 4.0 * best_tangent,
-           4.0 * best_tangent / best_primal);
+    printf("tangent, whole gradient (%d runs)%9.4f s   (%.2f x primal)\n", N_PARAMETERS,
+           (double)N_PARAMETERS * best_tangent,
+           (double)N_PARAMETERS * best_tangent / best_primal);
     printf("adjoint, whole gradient         %9.4f s   (%.2f x primal)\n", best_adjoint,
            best_adjoint / best_primal);
-    printf("adjoint speed-up over tangent for 4 parameters: %.2f\n",
-           4.0 * best_tangent / best_adjoint);
+    printf("adjoint speed-up over tangent for %d parameters: %.2f\n", N_PARAMETERS,
+           (double)N_PARAMETERS * best_tangent / best_adjoint);
     printf("adjoint memory, first 1-year run: peak resident growth %.1f MB (%.1f bytes per substep)\n",
            (double)(rss_after_first_adjoint_kb - rss_before_first_adjoint_kb) / 1024.0,
            1024.0 * (double)(rss_after_first_adjoint_kb - rss_before_first_adjoint_kb)
@@ -504,15 +528,16 @@ static void experiment_10c_timing(void)
 
 /* ---- E10d BFGS calibration over u = (ln k_lf, perc_limiter, ln Ksat, b) ---- */
 
-static void parameters_from_u(const double u[N_PARAMETERS], double p[N_PARAMETERS])
+static void parameters_from_u(const double u[N_CALIBRATED_PARAMETERS], double p[N_PARAMETERS])
 {
     p[0] = exp(u[0]);
     p[1] = u[1];
     p[2] = exp(u[2]);
     p[3] = u[3];
+    p[I_THETA_SAT] = THETA_SAT_KNOWN;   /* not calibrated in E10d */
 }
 
-static void clamp_u(double u[N_PARAMETERS])
+static void clamp_u(double u[N_CALIBRATED_PARAMETERS])
 {
     if (u[0] < log(KLF_LOWER_BOUND_M_PER_H)) u[0] = log(KLF_LOWER_BOUND_M_PER_H);
     if (u[0] > log(KLF_UPPER_BOUND_M_PER_H)) u[0] = log(KLF_UPPER_BOUND_M_PER_H);
@@ -525,8 +550,8 @@ static void clamp_u(double u[N_PARAMETERS])
 }
 
 /* cost and gradient in u; chain rule d/d(ln x) = x d/dx for k_lf and Ksat */
-static double cost_and_gradient_u(const double u[N_PARAMETERS], int n_sub,
-                                  double gradient_u[N_PARAMETERS])
+static double cost_and_gradient_u(const double u[N_CALIBRATED_PARAMETERS], int n_sub,
+                                  double gradient_u[N_CALIBRATED_PARAMETERS])
 {
     double p[N_PARAMETERS];
     double gradient_p[N_PARAMETERS];
@@ -541,17 +566,17 @@ static double cost_and_gradient_u(const double u[N_PARAMETERS], int n_sub,
     return cost;
 }
 
-static double vector_norm(const double v[N_PARAMETERS])
+static double vector_norm(const double v[N_CALIBRATED_PARAMETERS])
 {
     double sum = 0.0;
     int i;
 
-    for (i = 0; i < N_PARAMETERS; i++) sum = sum + v[i] * v[i];
+    for (i = 0; i < N_CALIBRATED_PARAMETERS; i++) sum = sum + v[i] * v[i];
     return sqrt(sum);
 }
 
-static void print_iteration(int iteration, double cost, const double u[N_PARAMETERS],
-                            const double gradient[N_PARAMETERS], int n_evaluations)
+static void print_iteration(int iteration, double cost, const double u[N_CALIBRATED_PARAMETERS],
+                            const double gradient[N_CALIBRATED_PARAMETERS], int n_evaluations)
 {
     double p[N_PARAMETERS];
 
@@ -564,16 +589,16 @@ static void calibrate_bfgs(const double p_start[N_PARAMETERS], int n_sub)
 {
     const int max_iterations = 200;
     double start_seconds = wall_clock_seconds();
-    double u[N_PARAMETERS];
-    double u_new[N_PARAMETERS];
+    double u[N_CALIBRATED_PARAMETERS];
+    double u_new[N_CALIBRATED_PARAMETERS];
     double p[N_PARAMETERS];
-    double gradient[N_PARAMETERS];
-    double gradient_new[N_PARAMETERS];
-    double direction[N_PARAMETERS];
-    double inverse_hessian[N_PARAMETERS][N_PARAMETERS];
-    double s[N_PARAMETERS];
-    double y[N_PARAMETERS];
-    double Hy[N_PARAMETERS];
+    double gradient[N_CALIBRATED_PARAMETERS];
+    double gradient_new[N_CALIBRATED_PARAMETERS];
+    double direction[N_CALIBRATED_PARAMETERS];
+    double inverse_hessian[N_CALIBRATED_PARAMETERS][N_CALIBRATED_PARAMETERS];
+    double s[N_CALIBRATED_PARAMETERS];
+    double y[N_CALIBRATED_PARAMETERS];
+    double Hy[N_CALIBRATED_PARAMETERS];
     double cost;
     double cost_new = 0.0;
     double step_length;
@@ -589,8 +614,8 @@ static void calibrate_bfgs(const double p_start[N_PARAMETERS], int n_sub)
     int r;
     int c;
 
-    for (r = 0; r < N_PARAMETERS; r++) {
-        for (c = 0; c < N_PARAMETERS; c++) inverse_hessian[r][c] = 0.0;
+    for (r = 0; r < N_CALIBRATED_PARAMETERS; r++) {
+        for (c = 0; c < N_CALIBRATED_PARAMETERS; c++) inverse_hessian[r][c] = 0.0;
         inverse_hessian[r][r] = 1.0;
     }
     u[0] = log(p_start[0]);
@@ -607,9 +632,9 @@ static void calibrate_bfgs(const double p_start[N_PARAMETERS], int n_sub)
 
     for (iteration = 1; iteration <= max_iterations; iteration++) {
         slope = 0.0;
-        for (r = 0; r < N_PARAMETERS; r++) {
+        for (r = 0; r < N_CALIBRATED_PARAMETERS; r++) {
             direction[r] = 0.0;
-            for (c = 0; c < N_PARAMETERS; c++) {
+            for (c = 0; c < N_CALIBRATED_PARAMETERS; c++) {
                 direction[r] = direction[r] - inverse_hessian[r][c] * gradient[c];
             }
             slope = slope + direction[r] * gradient[r];
@@ -617,8 +642,8 @@ static void calibrate_bfgs(const double p_start[N_PARAMETERS], int n_sub)
         if (slope >= 0.0) {
             /* not a descent direction: reset to steepest descent */
             slope = 0.0;
-            for (r = 0; r < N_PARAMETERS; r++) {
-                for (c = 0; c < N_PARAMETERS; c++) inverse_hessian[r][c] = 0.0;
+            for (r = 0; r < N_CALIBRATED_PARAMETERS; r++) {
+                for (c = 0; c < N_CALIBRATED_PARAMETERS; c++) inverse_hessian[r][c] = 0.0;
                 inverse_hessian[r][r] = 1.0;
                 direction[r] = -gradient[r];
                 slope = slope + direction[r] * gradient[r];
@@ -629,7 +654,7 @@ static void calibrate_bfgs(const double p_start[N_PARAMETERS], int n_sub)
         accepted = 0;
         step_length = 1.0;
         for (i_ls = 0; i_ls < 40; i_ls++) {
-            for (r = 0; r < N_PARAMETERS; r++) u_new[r] = u[r] + step_length * direction[r];
+            for (r = 0; r < N_CALIBRATED_PARAMETERS; r++) u_new[r] = u[r] + step_length * direction[r];
             clamp_u(u_new);
             parameters_from_u(u_new, p);
             cost_new = cost_primal(p, n_sub);
@@ -652,7 +677,7 @@ static void calibrate_bfgs(const double p_start[N_PARAMETERS], int n_sub)
            meaningfully (roundoff floor of the cost function) */
         relative_decrease = (cost - cost_new) / cost;
         if (relative_decrease < 1.0e-12) {
-            for (r = 0; r < N_PARAMETERS; r++) u[r] = u_new[r];
+            for (r = 0; r < N_CALIBRATED_PARAMETERS; r++) u[r] = u_new[r];
             cost = cost_new;
             print_iteration(iteration, cost, u, gradient_new, n_cost_evaluations);
             printf("     (cost decrease < 1e-12 relative: converged)\n");
@@ -661,7 +686,7 @@ static void calibrate_bfgs(const double p_start[N_PARAMETERS], int n_sub)
 
         /* BFGS update of the inverse Hessian */
         sy = 0.0;
-        for (r = 0; r < N_PARAMETERS; r++) {
+        for (r = 0; r < N_CALIBRATED_PARAMETERS; r++) {
             s[r] = u_new[r] - u[r];
             y[r] = gradient_new[r] - gradient[r];
             sy = sy + s[r] * y[r];
@@ -669,13 +694,13 @@ static void calibrate_bfgs(const double p_start[N_PARAMETERS], int n_sub)
         if (sy > 1.0e-300) {
             rho = 1.0 / sy;
             yHy = 0.0;
-            for (r = 0; r < N_PARAMETERS; r++) {
+            for (r = 0; r < N_CALIBRATED_PARAMETERS; r++) {
                 Hy[r] = 0.0;
-                for (c = 0; c < N_PARAMETERS; c++) Hy[r] = Hy[r] + inverse_hessian[r][c] * y[c];
+                for (c = 0; c < N_CALIBRATED_PARAMETERS; c++) Hy[r] = Hy[r] + inverse_hessian[r][c] * y[c];
                 yHy = yHy + y[r] * Hy[r];
             }
-            for (r = 0; r < N_PARAMETERS; r++) {
-                for (c = 0; c < N_PARAMETERS; c++) {
+            for (r = 0; r < N_CALIBRATED_PARAMETERS; r++) {
+                for (c = 0; c < N_CALIBRATED_PARAMETERS; c++) {
                     inverse_hessian[r][c] = inverse_hessian[r][c]
                         - rho * (Hy[r] * s[c] + s[r] * Hy[c])
                         + (rho * rho * yHy + rho) * s[r] * s[c];
@@ -683,7 +708,7 @@ static void calibrate_bfgs(const double p_start[N_PARAMETERS], int n_sub)
             }
         }
 
-        for (r = 0; r < N_PARAMETERS; r++) {
+        for (r = 0; r < N_CALIBRATED_PARAMETERS; r++) {
             u[r] = u_new[r];
             gradient[r] = gradient_new[r];
         }
@@ -697,9 +722,9 @@ static void calibrate_bfgs(const double p_start[N_PARAMETERS], int n_sub)
     parameters_from_u(u, p);
     printf("gradient method: %s   wall-clock time for the whole calibration: %.3f s\n",
            gradient_method_name(), wall_clock_seconds() - start_seconds);
-    for (r = 0; r < N_PARAMETERS; r++) {
-        printf("   %-13s %.10e   truth %.6e   rel err %+.2e\n", parameter_name[r], p[r],
-               parameter_truth[r], relative_difference(p[r], parameter_truth[r]));
+    for (r = 0; r < N_CALIBRATED_PARAMETERS; r++) {
+        printf("   %-13s %.10e   known %.6e   rel err %+.2e\n", parameter_name[r], p[r],
+               parameter_known[r], relative_difference(p[r], parameter_known[r]));
     }
     print_derived_soil("   derived:", p);
 }
@@ -708,7 +733,7 @@ static void experiment_10d_calibration(void)
 {
     printf("\n====================================================================\n");
     printf("E10d BFGS CALIBRATION, 4 parameters, u = (ln k_lf, perc_limiter, ln Ksat, b)\n");
-    printf("     twin experiment (1 year); start = E10a test point\n");
+    printf("     twin experiment (1 year); start = E10a test point; theta_sat at its known value\n");
     printf("====================================================================\n");
     gradient_method = 1;
     calibrate_bfgs(parameter_test_point, 4);
@@ -724,8 +749,8 @@ int main(int argc, char **argv)
     const char *output_dir = ".";
     const char *forcing_path = "forcing/rain_pet_example.csv";
     const char *experiments = "abcd";
-    const double check_point[N_PARAMETERS] = {1.0e-3, 0.7, 2.0, 5.0};
-    const double check_seed[N_PARAMETERS] = {1.0, 0.0, 0.0, 0.0};
+    const double check_point[N_PARAMETERS] = {1.0e-3, 0.7, 2.0, 5.0, 0.45};
+    const double check_seed[N_PARAMETERS] = {1.0, 0.0, 0.0, 0.0, 0.0};
     double gradient[N_PARAMETERS];
     double cost_check;
     double tangent_cost;

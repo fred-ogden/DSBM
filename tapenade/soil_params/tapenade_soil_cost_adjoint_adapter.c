@@ -13,6 +13,7 @@
  *       double perc_limiter_0_to_1, double *perc_limiter_0_to_1b,
  *       double K_sat_cm_per_h, double *K_sat_cm_per_hb,
  *       double b_exp, double *b_expb,
+ *       double theta_sat, double *theta_satb,
  *       const double *theta_in, int n_steps,
  *       int n_sub_setting, [int *n_sub_settingb or int n_sub_settingb,]
  *       const double *rain_mm_per_h, const double *pet_mm_per_h,
@@ -23,7 +24,8 @@
  * On entry *cost_function_valueb holds the adjoint seed (1 for a
  * gradient); on exit the parameter adjoints have been INCREMENTED by
  * seed * d(cost)/d(parameter), so they are zeroed first.  One call gives
- * all four gradient components, in physical units.
+ * all five gradient components (k_lf, perc_limiter, Ksat, b, theta_sat),
+ * in physical units.
  *
  * run_tapenade_soil_params.csh defines SOIL_COST_ADJOINT_NSUB_SLOT_BY_POINTER
  * or SOIL_COST_ADJOINT_NSUB_SLOT_BY_VALUE if Tapenade emits an integer
@@ -34,7 +36,7 @@
 
 #include "tapenade_soil_cost_primal_b.c"
 
-void soil_cost_adjoint_from_tapenade(const double parameters[4],
+void soil_cost_adjoint_from_tapenade(const double parameters[5],
                                      const double *theta_in,
                                      int n_steps,
                                      int n_sub_setting,
@@ -45,7 +47,7 @@ void soil_cost_adjoint_from_tapenade(const double parameters[4],
                                      double sst_lateral_m2,
                                      double sst_percolation_m2,
                                      double cost_adjoint_seed,
-                                     double gradient_of_cost[4])
+                                     double gradient_of_cost[5])
 {
     double cost_value = 0.0;
     double cost_adjoint = cost_adjoint_seed;
@@ -54,7 +56,7 @@ void soil_cost_adjoint_from_tapenade(const double parameters[4],
     int n_sub_setting_adjoint = 0;
 #endif
 
-    for (i_parameter = 0; i_parameter < 4; i_parameter++) {
+    for (i_parameter = 0; i_parameter < 5; i_parameter++) {
         gradient_of_cost[i_parameter] = 0.0;
     }
 
@@ -62,6 +64,7 @@ void soil_cost_adjoint_from_tapenade(const double parameters[4],
                                  parameters[1], &gradient_of_cost[1],
                                  parameters[2], &gradient_of_cost[2],
                                  parameters[3], &gradient_of_cost[3],
+                                 parameters[4], &gradient_of_cost[4],
                                  (double *)theta_in, n_steps,
                                  n_sub_setting,
 #ifdef SOIL_COST_ADJOINT_NSUB_SLOT_BY_VALUE
