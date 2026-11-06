@@ -81,7 +81,7 @@ static inline int any_disc_above(const double *theta, double thresh, int ndisc)
 
 // Pick a conservative substep count based on initial fluxes and rainfall demand.
 // Generic across NDISC.  lateral_severity is 0 unless the optional lateral
-// criterion is enabled (ctrl->substep_lateral_severity).
+// criterion is enabled (control->substep_lateral_severity).
 static int choose_n_sub_generic(double dt_hours,
                                 double rain_mm_per_h,
                                 const double *dz,
@@ -92,7 +92,7 @@ static int choose_n_sub_generic(double dt_hours,
 {
     int i;
     int nintf;
-    int n_sub;
+    int n_substeps;
     double qmax;               // largest interface flux magnitude (m/h)
     double a;                  // one interface flux magnitude (m/h)
     double dzmin;              // thinnest disc (m)
@@ -139,23 +139,23 @@ static int choose_n_sub_generic(double dt_hours,
 
     if (severity <= 1.0) {
         if (rain_mm_per_h > 0.0) {
-            n_sub = 2;
+            n_substeps = 2;
         } else {
-            n_sub = 1;
+            n_substeps = 1;
         }
     }
-    else if (severity <= 2.0)  n_sub = 4;
-    else if (severity <= 3.0)  n_sub = 6;
-    else if (severity <= 5.0)  n_sub = 8;
-    else                       n_sub = 12;
+    else if (severity <= 2.0)  n_substeps = 4;
+    else if (severity <= 3.0)  n_substeps = 6;
+    else if (severity <= 5.0)  n_substeps = 8;
+    else                       n_substeps = 12;
 
-    if (n_sub < 1)  n_sub = 1;
-    if (n_sub > 12) n_sub = 12;
-    return n_sub;
+    if (n_substeps < 1)  n_substeps = 1;
+    if (n_substeps > 12) n_substeps = 12;
+    return n_substeps;
 }
 
 int soil_step_one_hour_stateless(
-    const SoilControl        *ctrl,
+    const SoilControl        *control,
     const SoilGeometry       *geom,
     const SoilParameters     *params,
     const SoilLookupTables   *lut,          // may be NULL
@@ -180,12 +180,12 @@ int soil_step_one_hour_stateless(
     // ---- loop indices ----
     int i;                       // disc or interface index (0-based)
     int d;                       // disc index in the storage-capacity loop
-    int ss;                      // substep index
+    int substep;                      // substep index
 
     // ---- timestep constants ----
     int ndisc;                   // number of discs in use
     int nintf;                   // number of interfaces between discs
-    double dtH;                  // timestep (h)
+    double delta_t_h;                  // timestep (h)
     double rain_rate_m_per_h;    // rainfall rate (m/h)
     double pet_rate_m_per_h;     // potential ET rate (m/h)
     double theta_floor;          // lowest allowed soil moisture (-)
@@ -194,11 +194,11 @@ int soil_step_one_hour_stateless(
     double lat_sum;              // sum of per-disc lateral removal (m)
 
     // ---- substep count ----
-    double lateral_severity;           // lateral severity for adaptive n_sub (-)
+    double lateral_severity;           // lateral severity for adaptive n_substeps (-)
     double fc_to_sat_range;            // theta_sat - theta_fc (-)
     double lateral_exponent_per_hour;  // klf dt / (dz (sat - fc)) (-)
     double disc_severity;              // one disc's lateral severity (-)
-    int n_sub;                         // substeps this timestep
+    int n_substeps;                         // substeps this timestep
     double dt_sub;                     // substep length (h)
 
     // ---- working state and per-substep arrays ----
@@ -274,7 +274,7 @@ int soil_step_one_hour_stateless(
     }
     flux->percolation_to_gw_m = 0.0;
     flux->rain_into_soil_m    = 0.0;
-    flux->surface_precipitation_excess_m       = 0.0;
+    flux->rain_excess_m       = 0.0;
     flux->n_sub_used          = 0;
 
     volbal->in_rain_m       = 0.0;
@@ -285,9 +285,9 @@ int soil_step_one_hour_stateless(
     volbal->delta_storage_m = 0.0;
     volbal->residual_m      = 0.0;
 
-    ndisc = ctrl->ndisc;
+    ndisc = control->ndisc;
     nintf = ndisc - 1;
-    dtH   = ctrl->dt_hours;
+    delta_t_h   = control->dt_hours;
 
     rain_rate_m_per_h = forcing->rain_mm_per_h / 1000.0;
     pet_rate_m_per_h  = forcing->pet_mm_per_h  / 1000.0;
@@ -304,7 +304,7 @@ int soil_step_one_hour_stateless(
     }
 
     // The lookup table is used only when requested.
-    if (ctrl->use_ch_lookup_table) {
+    if (control->use_ch_lookup_table) {
         lookup_table_to_use = lut;
     } else {
         lookup_table_to_use = NULL;
@@ -313,13 +313,13 @@ int soil_step_one_hour_stateless(
     // A) storage at start
     storage_start = storage_sum_ndisc(theta, geom->dz_m);
 
-    // B) initial fluxes and n_sub
+    // B) initial fluxes and n_substeps
     for (i = 0; i < nintf; i++) {
         q0[i] = flux_DB_pair(sin->psi_in[i], sin->K_in[i],
                              sin->psi_in[i+1], sin->K_in[i+1],
                              geom->dz_m[i], geom->dz_m[i+1]);
     }
-    // Substeps per timestep (ctrl->n_sub_setting):
+    // Substeps per timestep (control->n_sub_setting):
     //   N_SUB_SETTING_DEFAULT (0): fixed at N_SUB_DEFAULT_COUNT (4).  A
     //     fixed count avoids the jumps in outputs and derivatives that the
     //     adaptive choice causes when a calibration parameter moves a
@@ -328,19 +328,19 @@ int soil_step_one_hour_stateless(
     //   > 0: fixed at that count.
     //
     // Optional refinements of the adaptive choice only (both off by default):
-    //   ctrl->substep_lateral_severity: also require that the lateral
+    //   control->substep_lateral_severity: also require that the lateral
     //     linear reservoir removes no more than
     //     LATERAL_SEVERITY_FRACTION_PER_SUBSTEP of a disc's moisture above
     //     theta_fc per substep (linearized), for discs above theta_fc;
-    //   ctrl->n_sub_minimum: a floor on the adaptive substep count.
+    //   control->n_sub_minimum: a floor on the adaptive substep count.
     lateral_severity = 0.0;
-    if (ctrl->substep_lateral_severity && params->klf_m_per_h > 0.0) {
+    if (control->substep_lateral_severity && params->klf_m_per_h > 0.0) {
         fc_to_sat_range = params->theta_sat - params->theta_fc;
         if (fc_to_sat_range < 1.0e-12) fc_to_sat_range = 1.0e-12;
         for (i = 0; i < ndisc; i++) {
             if (theta[i] > params->theta_fc) {
                 lateral_exponent_per_hour =
-                    params->klf_m_per_h * dtH / (geom->dz_m[i] * fc_to_sat_range);
+                    params->klf_m_per_h * delta_t_h / (geom->dz_m[i] * fc_to_sat_range);
                 disc_severity =
                     lateral_exponent_per_hour / LATERAL_SEVERITY_FRACTION_PER_SUBSTEP;
                 if (disc_severity > lateral_severity) lateral_severity = disc_severity;
@@ -348,29 +348,29 @@ int soil_step_one_hour_stateless(
         }
     }
 
-    if (ctrl->n_sub_setting > 0) {
-        n_sub = ctrl->n_sub_setting;
-    } else if (ctrl->n_sub_setting == N_SUB_SETTING_DEFAULT) {
-        n_sub = N_SUB_DEFAULT_COUNT;
+    if (control->n_sub_setting > 0) {
+        n_substeps = control->n_sub_setting;
+    } else if (control->n_sub_setting == N_SUB_SETTING_DEFAULT) {
+        n_substeps = N_SUB_DEFAULT_COUNT;
     } else {
-        n_sub = choose_n_sub_generic(dtH, forcing->rain_mm_per_h,
+        n_substeps = choose_n_sub_generic(delta_t_h, forcing->rain_mm_per_h,
                                      geom->dz_m, theta, params->theta_sat, q0, ndisc,
                                      lateral_severity);
-        if (n_sub < ctrl->n_sub_minimum) n_sub = ctrl->n_sub_minimum;
+        if (n_substeps < control->n_sub_minimum) n_substeps = control->n_sub_minimum;
     }
-    if (n_sub < 1) n_sub = 1;
-    flux->n_sub_used = n_sub;
-    DSBM_CENSUS(CENSUS_TIMESTEP, n_sub)
+    if (n_substeps < 1) n_substeps = 1;
+    flux->n_sub_used = n_substeps;
+    DSBM_CENSUS(CENSUS_TIMESTEP, n_substeps)
 
-    dt_sub = dtH / (double)n_sub;
+    dt_sub = delta_t_h / (double)n_substeps;
 
     // per-substep work arrays
     for (i = 0; i <= ndisc; i++) Accept[i] = 0.0;
 
-    // External inflow (incident) is available to the caller via forcing and dtH.
+    // External inflow (incident) is available to the caller via forcing and delta_t_h.
     // Here we only track infiltrated vs excess for the step.
     // Loop over substeps
-    for (ss = 0; ss < n_sub; ss++) {
+    for (substep = 0; substep < n_substeps; substep++) {
         // D1) rainfall into disc 0
         rain_sub = rain_rate_m_per_h * dt_sub;  // m
         cap1     = (params->theta_sat - theta[0]) * geom->dz_m[0];
@@ -395,7 +395,7 @@ int soil_step_one_hour_stateless(
         if (theta[0] > params->theta_sat) theta[0] = params->theta_sat;
 
         flux->rain_into_soil_m += used;
-        flux->surface_precipitation_excess_m    += excess;
+        flux->rain_excess_m    += excess;
 
         // D2) properties after rainfall addition (LUT or analytic)
         for (i = 0; i < NDISC; i++) hint_local[i] = sout->ch_lut_hint_out[i];
@@ -442,7 +442,7 @@ int soil_step_one_hour_stateless(
         // drainage occurs only above theta_fc and cannot drain the bottom disc
         // below theta_fc.  Without it, use conductivity-based free drainage.
         bottom_potential = 0.0;
-        if (!ctrl->apply_fc_perc_threshold || theta[ndisc-1] > params->theta_fc) {
+        if (!control->apply_fc_perc_threshold || theta[ndisc-1] > params->theta_fc) {
             K_now = K_from_theta(theta[ndisc-1], params->theta_sat,
                                  params->K_sat_cm_per_h, params->b_exp);
             percolation_rate = params->perc_limiter_0_to_1 * K_now; // m/h
@@ -573,7 +573,7 @@ int soil_step_one_hour_stateless(
         // D9) apply bottom percolation
         perc_vol = 0.0;
         if (bottom_potential > 0.0) {
-            if (ctrl->apply_fc_perc_threshold) {
+            if (control->apply_fc_perc_threshold) {
                 drainage_floor = params->theta_fc;
             } else {
                 drainage_floor = theta_floor;
@@ -595,7 +595,7 @@ int soil_step_one_hour_stateless(
         flux->interface_vol_m[ndisc-1] += perc_vol;
 
         // D10) ET from root zone
-        nroot = ctrl->deepest_root_disc;
+        nroot = control->deepest_root_disc;
         if (nroot < 1) nroot = 1;
         if (nroot > ndisc) nroot = ndisc;
 
@@ -663,7 +663,7 @@ int soil_step_one_hour_stateless(
         // Default: the linear-reservoir removal above theta_fc is integrated
         // exactly over the substep (exponential decay toward theta_fc; no
         // storage cap needed, no zero-gradient region for calibration).
-        // ctrl->lateral_scheme = LATERAL_SCHEME_FORWARD_EULER restores the
+        // control->lateral_scheme = LATERAL_SCHEME_FORWARD_EULER restores the
         // legacy explicit step.
 #ifdef DSBM_CENSUS_BUILD
         for (i = 0; i < ndisc; i++) {
@@ -673,7 +673,7 @@ int soil_step_one_hour_stateless(
         }
 #endif
         if (params->klf_m_per_h > 0.0 && any_disc_above(theta, params->theta_fc, ndisc)) {
-            if (ctrl->lateral_scheme == LATERAL_SCHEME_FORWARD_EULER) {
+            if (control->lateral_scheme == LATERAL_SCHEME_FORWARD_EULER) {
                 lat_removed =
                     remove_lateral_to_subsurface_nash_substep(
                         theta, geom->dz_m, params->theta_fc, params->theta_sat,
@@ -715,7 +715,7 @@ int soil_step_one_hour_stateless(
 
     // finalize rates
     for (i = 0; i < NDISC; i++) {
-        flux->interface_rate_m_per_h[i] = flux->interface_vol_m[i] / dtH;
+        flux->interface_rate_m_per_h[i] = flux->interface_vol_m[i] / delta_t_h;
     }
 
     // write state out
@@ -735,7 +735,7 @@ int soil_step_one_hour_stateless(
     storage_end = storage_sum_ndisc(theta, geom->dz_m);
 
     volbal->in_rain_m  = flux->rain_into_soil_m;
-    volbal->excess_m   = flux->surface_precipitation_excess_m;
+    volbal->excess_m   = flux->rain_excess_m;
     volbal->perc_m     = flux->percolation_to_gw_m;
 
     // total lateral already accumulated in volbal->lateral_m inside loop

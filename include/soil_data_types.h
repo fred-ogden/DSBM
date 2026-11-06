@@ -136,7 +136,7 @@ typedef struct {
     double lateral_by_disc_m[NDISC];
     double percolation_to_gw_m;
     double rain_into_soil_m;
-    double surface_precipitation_excess_m;
+    double rain_excess_m;
 
     // Internal vertical exchanges: [0..NDISC-2] interfaces i->i+1; [NDISC-1] bottom perc
     double interface_vol_m[NDISC];

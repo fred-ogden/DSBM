@@ -134,7 +134,7 @@ static int noahmp_rosr12(double p[NDISC], const double a[NDISC],
 }
 
 /* Translation of SRT for the unfrozen/free-drainage comparison path. */
-static void noahmp_srt(const SoilControl *ctrl,
+static void noahmp_srt(const SoilControl *control,
                        const SoilGeometry *geom, const SoilParameters *params,
                        const double theta[NDISC], const double etrani_m_per_s[NDISC],
                        const double lateral_m_per_s[NDISC],
@@ -180,7 +180,7 @@ static void noahmp_srt(const SoilControl *ctrl,
             double qdrain = params->perc_limiter_0_to_1 * wcnd[k];
             denom[k] = zsoil[k - 1] - zsoil[k];
 
-            if (ctrl->apply_fc_perc_threshold) {
+            if (control->apply_fc_perc_threshold) {
                 double available_m = (theta[k] - params->theta_fc) * geom->dz_m[k];
                 double max_qdrain;
                 if (available_m <= 0.0) {
@@ -300,20 +300,20 @@ static int noahmp_sstep(const SoilGeometry *geom, const SoilParameters *params,
     return 0;
 }
 
-static void comparison_et_rates(const SoilControl *ctrl, const SoilGeometry *geom,
+static void comparison_et_rates(const SoilControl *control, const SoilGeometry *geom,
                                 const SoilParameters *params, const double theta[NDISC],
                                 double pet_m_per_s, double dtfine_s,
                                 double etrani_m_per_s[NDISC])
 {
-    int nroot = ctrl->deepest_root_disc;
+    int nroot = control->deepest_root_disc;
     double denom = params->theta_aet_eq_pet - params->theta_wp;
     int k;
 
     if (nroot < 1) nroot = 1;
-    if (nroot > ctrl->ndisc) nroot = ctrl->ndisc;
+    if (nroot > control->ndisc) nroot = control->ndisc;
     if (denom < 1.0e-12) denom = 1.0e-12;
 
-    for (k = 0; k < ctrl->ndisc; k++) etrani_m_per_s[k] = 0.0;
+    for (k = 0; k < control->ndisc; k++) etrani_m_per_s[k] = 0.0;
     for (k = 0; k < nroot; k++) {
         double f_aet;
         double demand;
@@ -330,7 +330,7 @@ static void comparison_et_rates(const SoilControl *ctrl, const SoilGeometry *geo
 }
 
 int noahmp_soil_step_one_hour_stateless(
-    const SoilControl        *ctrl,
+    const SoilControl        *control,
     const SoilGeometry       *geom,
     const SoilParameters     *params,
     const SoilStateIn        *sin,
@@ -352,14 +352,14 @@ int noahmp_soil_step_one_hour_stateless(
 
     (void)debug_fptr;
 
-    if (!ctrl || !geom || !params || !sin || !forcing || !sout || !flux || !volbal) return 1;
-    ndisc = ctrl->ndisc;
+    if (!control || !geom || !params || !sin || !forcing || !sout || !flux || !volbal) return 1;
+    ndisc = control->ndisc;
     if (ndisc != NDISC || ndisc < 2) return 2;
-    if (ctrl->noahmp_fidelity != NOAHMP_FIDELITY_AS_WRITTEN &&
-        ctrl->noahmp_fidelity != NOAHMP_FIDELITY_DSBM_TESTING) return 4;
+    if (control->noahmp_fidelity != NOAHMP_FIDELITY_AS_WRITTEN &&
+        control->noahmp_fidelity != NOAHMP_FIDELITY_DSBM_TESTING) return 4;
     // The field-capacity percolation threshold is not part of Noah-MP.
-    if (ctrl->noahmp_fidelity == NOAHMP_FIDELITY_AS_WRITTEN &&
-        ctrl->apply_fc_perc_threshold) return 5;
+    if (control->noahmp_fidelity == NOAHMP_FIDELITY_AS_WRITTEN &&
+        control->apply_fc_perc_threshold) return 5;
 
     memset(flux, 0, sizeof(*flux));
     memset(volbal, 0, sizeof(*volbal));
@@ -369,7 +369,7 @@ int noahmp_soil_step_one_hour_stateless(
     }
 
     storage_start = storage_sum(theta, geom->dz_m, ndisc);
-    dt_s = ctrl->dt_hours * 3600.0;
+    dt_s = control->dt_hours * 3600.0;
     rain_m_per_s = (forcing->rain_mm_per_h / 1000.0) / 3600.0;
     pet_m_per_s = (forcing->pet_mm_per_h / 1000.0) / 3600.0;
 
@@ -391,7 +391,7 @@ int noahmp_soil_step_one_hour_stateless(
         double storage_before = storage_sum(theta, geom->dz_m, ndisc);
         double et_iter_m = 0.0;
 
-        comparison_et_rates(ctrl, geom, params, theta, pet_m_per_s, dtfine_s, etrani);
+        comparison_et_rates(control, geom, params, theta, pet_m_per_s, dtfine_s, etrani);
 
         /* Fidelity 2 only (testing): CFE3.1/DSBM lateral-flow formulation,
          * evaluated independently for each disc from the soil moisture at
@@ -402,7 +402,7 @@ int noahmp_soil_step_one_hour_stateless(
          * The linear reservoir is the one DSBM uses,
          *   d(theta)/dt = -k_lf (theta - theta_fc) / (dz (theta_sat - theta_fc)),
          * integrated over the fine step with the DSBM scheme selected by
-         * ctrl->lateral_scheme:
+         * control->lateral_scheme:
          *   LATERAL_SCHEME_EXPONENTIAL (default): exact solution,
          *     removed = (theta - theta_fc) (1 - exp(-a)) dz,
          *     a = k_lf dt_fine / (dz (theta_sat - theta_fc));
@@ -412,13 +412,13 @@ int noahmp_soil_step_one_hour_stateless(
         for (k = 0; k < ndisc; k++) {
             double lateral_this_substep_m = 0.0;
 
-            if (ctrl->noahmp_fidelity == NOAHMP_FIDELITY_DSBM_TESTING &&
+            if (control->noahmp_fidelity == NOAHMP_FIDELITY_DSBM_TESTING &&
                 params->klf_m_per_h > 0.0 && theta[k] > params->theta_fc) {
                 double denom = params->theta_sat - params->theta_fc;
 
                 if (denom < 1.0e-12) denom = 1.0e-12;
 
-                if (ctrl->lateral_scheme == LATERAL_SCHEME_FORWARD_EULER) {
+                if (control->lateral_scheme == LATERAL_SCHEME_FORWARD_EULER) {
                     double frac;
                     double potential_m;
                     double available_m;
@@ -449,7 +449,7 @@ int noahmp_soil_step_one_hour_stateless(
             volbal->lateral_m += lateral_this_substep_m;
         }
 
-        noahmp_srt(ctrl, geom, params, theta, etrani, lateral_m_per_s,
+        noahmp_srt(control, geom, params, theta, etrani, lateral_m_per_s,
                    rain_m_per_s, 0.0, dtfine_s, ndisc,
                    rhstt, ai, bi, ci, wcnd, wdf, ddz, &qdrain, interface_q);
 
@@ -494,16 +494,16 @@ int noahmp_soil_step_one_hour_stateless(
     for (k = 0; k < ndisc; k++) {
         sout->theta_out[k] = theta[k];
         flux->interface_rate_m_per_h[k] = flux->interface_vol_m[k]
-                                        / ctrl->dt_hours;
+                                        / control->dt_hours;
     }
 
-    flux->surface_precipitation_excess_m = total_saturation_excess_m;
-    flux->rain_into_soil_m = rain_m_per_s * dt_s - flux->surface_precipitation_excess_m;
+    flux->rain_excess_m = total_saturation_excess_m;
+    flux->rain_into_soil_m = rain_m_per_s * dt_s - flux->rain_excess_m;
     if (flux->rain_into_soil_m < 0.0) flux->rain_into_soil_m = 0.0;
 
     storage_end = storage_sum(theta, geom->dz_m, ndisc);
     volbal->in_rain_m = flux->rain_into_soil_m;
-    volbal->excess_m = flux->surface_precipitation_excess_m;
+    volbal->excess_m = flux->rain_excess_m;
     volbal->perc_m = flux->percolation_to_gw_m;
     /* volbal->lateral_m was accumulated from the per-disc Richards sinks. */
     volbal->delta_storage_m = storage_end - storage_start;

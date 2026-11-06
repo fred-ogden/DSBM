@@ -31,7 +31,7 @@ extern "C" {
 #endif
 
 int noahmp_soil_step_one_hour_stateless(
-    const SoilControl        *ctrl,
+    const SoilControl        *control,
     const SoilGeometry       *geom,
     const SoilParameters     *params,
     const SoilStateIn        *sin,

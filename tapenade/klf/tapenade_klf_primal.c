@@ -275,7 +275,7 @@ void dsbm_lateral_from_klf(double klf_m_per_h,
         *percolation_total_m = *percolation_total_m + flux.percolation_to_gw_m;
         *aet_total_m = *aet_total_m + volbal.AET_m;
         *precipitation_excess_total_m =
-            *precipitation_excess_total_m + flux.surface_precipitation_excess_m;
+            *precipitation_excess_total_m + flux.rain_excess_m;
         n_sub_used_by_step[i_step] = flux.n_sub_used;
     }
 
