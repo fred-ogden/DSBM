@@ -269,6 +269,7 @@ forward-Euler lateral sink, which is now Noah-MP fidelity 2 with
 |-- run_noahmp_fidelity1.csh             Noah-MP fidelity 1, Noah-MP as written
 |-- tools/
 |   |-- check_regression.csh             byte-for-byte check against an earlier commit
+|   |-- compare_run_times.csh            run times of HEAD against an earlier commit
 |   |-- run_branch_census.csh            branch-activity census
 |   |-- run_equal_head_census.csh        equal-head limit census over soil parameter sets
 |   `-- run_nsub_timing.csh              substep count versus cost and results
@@ -276,7 +277,8 @@ forward-Euler lateral sink, which is now Noah-MP fidelity 2 with
     |-- initial/                         first one-timestep experiment
     |-- klf/                             E1-E7: lateral rate constant k_lf
     |-- cost/                            E8-E9: cost-function gradient, adjoint
-    `-- soil_params/                     E10: four parameters, phi_sat from Ksat
+    |-- soil_params/                     E10: four parameters, phi_sat from Ksat
+    `-- equal_head/                      E11: equal-head limiter derivative at every activation
 ```
 
 Generated executables, build products, model output (`output/`), and
@@ -654,6 +656,7 @@ for these experiments, not to build or run the model.
 | `tapenade/klf/`         | E1-E7       | tangent of lateral flow with respect to k_lf; substep and lateral-scheme effects |
 | `tapenade/cost/`        | E8-E9       | gradient of a cost function (sum of 1 - NSE for lateral flow and percolation) with respect to k_lf and perc_limiter; tangent and adjoint; BFGS calibration |
 | `tapenade/soil_params/` | E10         | four parameters (k_lf, perc_limiter, Ksat, b), with phi_sat computed from Ksat, and theta_fc and theta_wp from phi_sat and b, inside the differentiated code |
+| `tapenade/equal_head/`  | E11         | tangent of the equal-head limiter at every activation on the record, against the analytic implicit-function derivative and finite differences |
 
 For example:
 
