@@ -84,8 +84,8 @@ typedef struct {
 } SoilControl;
 
 typedef struct {
-    double dz[NDISC];
-    double zc[NDISC];
+    double dz_m[NDISC];
+    double zc_m[NDISC];
 } SoilGeometry;
 
 typedef struct {

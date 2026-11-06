@@ -32,7 +32,7 @@ extern "C" {
 int soil_step_one_hour_stateless(
     const SoilControl        *ctrl,
     const SoilGeometry       *geom,
-    const SoilParameters     *par,
+    const SoilParameters     *params,
     const SoilLookupTables   *lut,      // may be NULL to use analytic CH
     const SoilStateIn        *sin,
     const SoilForcing        *forcing,

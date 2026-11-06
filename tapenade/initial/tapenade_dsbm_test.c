@@ -17,35 +17,35 @@
 static void initialize_baseline_state(SoilStateIn *sin)
 {
     SoilGeometry geom;
-    SoilParameters par;
+    SoilParameters params;
     double theta[NDISC];
     double zwt;
     int hint[NDISC];
 
-    geom.dz[0] = 0.10;
-    geom.dz[1] = 0.30;
-    geom.dz[2] = 0.60;
-    geom.dz[3] = 1.00;
+    geom.dz_m[0] = 0.10;
+    geom.dz_m[1] = 0.30;
+    geom.dz_m[2] = 0.60;
+    geom.dz_m[3] = 1.00;
 
-    geom.zc[0] = 0.05;
-    geom.zc[1] = 0.25;
-    geom.zc[2] = 0.70;
-    geom.zc[3] = 1.50;
+    geom.zc_m[0] = 0.05;
+    geom.zc_m[1] = 0.25;
+    geom.zc_m[2] = 0.70;
+    geom.zc_m[3] = 1.50;
 
-    par.theta_r = 0.0;
-    par.theta_sat = 0.439;
-    par.phi_sat_cm = 10.415 * pow(1.2168, -0.3266);
-    par.b_exp = 4.05;
+    params.theta_r = 0.0;
+    params.theta_sat = 0.439;
+    params.phi_sat_cm = 10.415 * pow(1.2168, -0.3266);
+    params.b_exp = 4.05;
 
     for (int i = 0; i < NDISC; i++)
         hint[i] = -1;
 
     initialize_hydrostatic_from_storage(
         2.0,
-        par.theta_sat,
-        par.phi_sat_cm,
-        par.b_exp,
-        geom.zc,
+        params.theta_sat,
+        params.phi_sat_cm,
+        params.b_exp,
+        geom.zc_m,
         0.7843498367003,
         &zwt,
         theta);
@@ -64,11 +64,11 @@ static void initialize_baseline_state(SoilStateIn *sin)
         theta,
         sin->psi_in,
         sin->K_in,
-        par.theta_r,
-        par.theta_sat,
+        params.theta_r,
+        params.theta_sat,
         1.2168,
-        par.phi_sat_cm,
-        par.b_exp,
+        params.phi_sat_cm,
+        params.b_exp,
         hint);
 }
 
@@ -79,7 +79,7 @@ void dsbm_percolation_from_ksat(double K_sat_cm_per_h,
 {
     SoilControl ctrl;
     SoilGeometry geom;
-    SoilParameters par;
+    SoilParameters params;
     SoilStateOut sout;
     SoilForcing forcing;
     SoilFluxes flux;
@@ -95,15 +95,15 @@ void dsbm_percolation_from_ksat(double K_sat_cm_per_h,
     ctrl.lateral_scheme = LATERAL_SCHEME_FORWARD_EULER;  /* scheme used when this experiment was run */
     ctrl.dt_hours = 1.0;
 
-    geom.dz[0] = 0.10;
-    geom.dz[1] = 0.30;
-    geom.dz[2] = 0.60;
-    geom.dz[3] = 1.00;
+    geom.dz_m[0] = 0.10;
+    geom.dz_m[1] = 0.30;
+    geom.dz_m[2] = 0.60;
+    geom.dz_m[3] = 1.00;
 
-    geom.zc[0] = 0.05;
-    geom.zc[1] = 0.25;
-    geom.zc[2] = 0.70;
-    geom.zc[3] = 1.50;
+    geom.zc_m[0] = 0.05;
+    geom.zc_m[1] = 0.25;
+    geom.zc_m[2] = 0.70;
+    geom.zc_m[3] = 1.50;
 
     /*
      * Baseline soil parameters from configs/soil_params.dat.
@@ -113,13 +113,13 @@ void dsbm_percolation_from_ksat(double K_sat_cm_per_h,
      * respect to K_sat_cm_per_h, not the configuration preprocessing that
      * derives other parameters from Ksat.
      */
-    par.theta_r = 0.0;
-    par.theta_sat = 0.439;
-    par.K_sat_cm_per_h = K_sat_cm_per_h;
-    par.phi_sat_cm = 10.415 * pow(1.2168, -0.3266);
-    par.b_exp = 4.05;
-    par.perc_limiter_0_to_1 = 0.81;
-    par.klf_m_per_h = 0.000005;
+    params.theta_r = 0.0;
+    params.theta_sat = 0.439;
+    params.K_sat_cm_per_h = K_sat_cm_per_h;
+    params.phi_sat_cm = 10.415 * pow(1.2168, -0.3266);
+    params.b_exp = 4.05;
+    params.perc_limiter_0_to_1 = 0.81;
+    params.klf_m_per_h = 0.000005;
 
     {
         const double atmospheric_pressure_head_cm = 1033.2274528;
@@ -127,17 +127,17 @@ void dsbm_percolation_from_ksat(double K_sat_cm_per_h,
         const double field_capacity_head_cm =
             field_capacity_pressure_ratio * atmospheric_pressure_head_cm;
 
-        par.theta_fc =
-            (field_capacity_head_cm <= par.phi_sat_cm)
-            ? par.theta_sat
-            : par.theta_sat *
-              pow(par.phi_sat_cm / field_capacity_head_cm,
-                  1.0 / par.b_exp);
+        params.theta_fc =
+            (field_capacity_head_cm <= params.phi_sat_cm)
+            ? params.theta_sat
+            : params.theta_sat *
+              pow(params.phi_sat_cm / field_capacity_head_cm,
+                  1.0 / params.b_exp);
 
-        par.theta_aet_eq_pet = par.theta_fc;
+        params.theta_aet_eq_pet = params.theta_fc;
     }
 
-    par.theta_wp = 0.10;
+    params.theta_wp = 0.10;
 
     forcing.rain_mm_per_h = 0.0;
     forcing.pet_mm_per_h = 0.0;
@@ -145,7 +145,7 @@ void dsbm_percolation_from_ksat(double K_sat_cm_per_h,
     if (soil_step_one_hour_stateless(
             &ctrl,
             &geom,
-            &par,
+            &params,
             NULL,
             sin,
             &forcing,

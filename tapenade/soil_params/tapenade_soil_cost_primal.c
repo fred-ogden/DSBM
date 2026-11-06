@@ -176,7 +176,7 @@ void dsbm_soil_cost_from_params(double klf_m_per_h,
 {
     SoilControl ctrl;
     SoilGeometry geom;
-    SoilParameters par;
+    SoilParameters params;
     SoilStateIn sin;
     SoilStateOut sout;
     SoilForcing forcing;
@@ -207,25 +207,25 @@ void dsbm_soil_cost_from_params(double klf_m_per_h,
     // The equal-head limiter on downward transfers is always active in the
     // kernel (FLO 11/06/2026: no selection field remains).
 
-    geom.dz[0] = 0.10;
-    geom.dz[1] = 0.30;
-    geom.dz[2] = 0.60;
-    geom.dz[3] = 1.00;
-    geom.zc[0] = 0.05;
-    geom.zc[1] = 0.25;
-    geom.zc[2] = 0.70;
-    geom.zc[3] = 1.50;
+    geom.dz_m[0] = 0.10;
+    geom.dz_m[1] = 0.30;
+    geom.dz_m[2] = 0.60;
+    geom.dz_m[3] = 1.00;
+    geom.zc_m[0] = 0.05;
+    geom.zc_m[1] = 0.25;
+    geom.zc_m[2] = 0.70;
+    geom.zc_m[3] = 1.50;
 
-    par.theta_r = 0.0;
-    par.theta_sat = SOIL_COST_THETA_SAT;
-    par.K_sat_cm_per_h = K_sat_cm_per_h;
-    par.phi_sat_cm = soil_cost_phi_sat_cm_from_ksat(K_sat_cm_per_h);
-    par.b_exp = b_exp;
-    par.perc_limiter_0_to_1 = perc_limiter_0_to_1;
-    par.klf_m_per_h = klf_m_per_h;
-    par.theta_fc = soil_cost_theta_fc(par.theta_sat, par.phi_sat_cm, par.b_exp);
-    par.theta_aet_eq_pet = par.theta_fc;
-    par.theta_wp = soil_cost_theta_wp(par.theta_sat, par.phi_sat_cm, par.b_exp);
+    params.theta_r = 0.0;
+    params.theta_sat = SOIL_COST_THETA_SAT;
+    params.K_sat_cm_per_h = K_sat_cm_per_h;
+    params.phi_sat_cm = soil_cost_phi_sat_cm_from_ksat(K_sat_cm_per_h);
+    params.b_exp = b_exp;
+    params.perc_limiter_0_to_1 = perc_limiter_0_to_1;
+    params.klf_m_per_h = klf_m_per_h;
+    params.theta_fc = soil_cost_theta_fc(params.theta_sat, params.phi_sat_cm, params.b_exp);
+    params.theta_aet_eq_pet = params.theta_fc;
+    params.theta_wp = soil_cost_theta_wp(params.theta_sat, params.phi_sat_cm, params.b_exp);
 
     for (i_disc = 0; i_disc < NDISC; i_disc++) {
         theta_current[i_disc] = theta_in[i_disc];
@@ -242,14 +242,14 @@ void dsbm_soil_cost_from_params(double klf_m_per_h,
         }
         compute_props_with_option_stateless(
             NULL, theta_current, sin.psi_in, sin.K_in,
-            par.theta_r, par.theta_sat, par.K_sat_cm_per_h,
-            par.phi_sat_cm, par.b_exp, ch_lut_hint);
+            params.theta_r, params.theta_sat, params.K_sat_cm_per_h,
+            params.phi_sat_cm, params.b_exp, ch_lut_hint);
 
         forcing.rain_mm_per_h = rain_mm_per_h[i_step];
         forcing.pet_mm_per_h = pet_mm_per_h[i_step];
 
         kernel_status = soil_step_one_hour_stateless(
-            &ctrl, &geom, &par, NULL, &sin, &forcing, &sout, &flux, &volbal);
+            &ctrl, &geom, &params, NULL, &sin, &forcing, &sout, &flux, &volbal);
         kernel_status_sum = kernel_status_sum + kernel_status;
 
         lateral_this_hour_m = 0.0;
@@ -292,7 +292,7 @@ void dsbm_soil_series_from_params(double klf_m_per_h,
 {
     SoilControl ctrl;
     SoilGeometry geom;
-    SoilParameters par;
+    SoilParameters params;
     SoilStateIn sin;
     SoilStateOut sout;
     SoilForcing forcing;
@@ -316,25 +316,25 @@ void dsbm_soil_series_from_params(double klf_m_per_h,
     // Same kernel, so the synthetic observations also use the equal-head
     // limiter, matching the differentiated primal model.
 
-    geom.dz[0] = 0.10;
-    geom.dz[1] = 0.30;
-    geom.dz[2] = 0.60;
-    geom.dz[3] = 1.00;
-    geom.zc[0] = 0.05;
-    geom.zc[1] = 0.25;
-    geom.zc[2] = 0.70;
-    geom.zc[3] = 1.50;
+    geom.dz_m[0] = 0.10;
+    geom.dz_m[1] = 0.30;
+    geom.dz_m[2] = 0.60;
+    geom.dz_m[3] = 1.00;
+    geom.zc_m[0] = 0.05;
+    geom.zc_m[1] = 0.25;
+    geom.zc_m[2] = 0.70;
+    geom.zc_m[3] = 1.50;
 
-    par.theta_r = 0.0;
-    par.theta_sat = SOIL_COST_THETA_SAT;
-    par.K_sat_cm_per_h = K_sat_cm_per_h;
-    par.phi_sat_cm = soil_cost_phi_sat_cm_from_ksat(K_sat_cm_per_h);
-    par.b_exp = b_exp;
-    par.perc_limiter_0_to_1 = perc_limiter_0_to_1;
-    par.klf_m_per_h = klf_m_per_h;
-    par.theta_fc = soil_cost_theta_fc(par.theta_sat, par.phi_sat_cm, par.b_exp);
-    par.theta_aet_eq_pet = par.theta_fc;
-    par.theta_wp = soil_cost_theta_wp(par.theta_sat, par.phi_sat_cm, par.b_exp);
+    params.theta_r = 0.0;
+    params.theta_sat = SOIL_COST_THETA_SAT;
+    params.K_sat_cm_per_h = K_sat_cm_per_h;
+    params.phi_sat_cm = soil_cost_phi_sat_cm_from_ksat(K_sat_cm_per_h);
+    params.b_exp = b_exp;
+    params.perc_limiter_0_to_1 = perc_limiter_0_to_1;
+    params.klf_m_per_h = klf_m_per_h;
+    params.theta_fc = soil_cost_theta_fc(params.theta_sat, params.phi_sat_cm, params.b_exp);
+    params.theta_aet_eq_pet = params.theta_fc;
+    params.theta_wp = soil_cost_theta_wp(params.theta_sat, params.phi_sat_cm, params.b_exp);
 
     for (i_disc = 0; i_disc < NDISC; i_disc++) {
         theta_current[i_disc] = theta_in[i_disc];
@@ -348,14 +348,14 @@ void dsbm_soil_series_from_params(double klf_m_per_h,
         }
         compute_props_with_option_stateless(
             NULL, theta_current, sin.psi_in, sin.K_in,
-            par.theta_r, par.theta_sat, par.K_sat_cm_per_h,
-            par.phi_sat_cm, par.b_exp, ch_lut_hint);
+            params.theta_r, params.theta_sat, params.K_sat_cm_per_h,
+            params.phi_sat_cm, params.b_exp, ch_lut_hint);
 
         forcing.rain_mm_per_h = rain_mm_per_h[i_step];
         forcing.pet_mm_per_h = pet_mm_per_h[i_step];
 
         soil_step_one_hour_stateless(
-            &ctrl, &geom, &par, NULL, &sin, &forcing, &sout, &flux, &volbal);
+            &ctrl, &geom, &params, NULL, &sin, &forcing, &sout, &flux, &volbal);
 
         lateral_series_m[i_step] = 0.0;
         for (i_disc = 0; i_disc < NDISC; i_disc++) {

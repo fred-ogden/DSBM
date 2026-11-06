@@ -379,7 +379,7 @@ typedef struct {
     double initial_storage_m;
 } SoilConfigOptions;
 
-static int load_config_file(const char *path, SoilParameters *par, SoilConfigOptions *config)
+static int load_config_file(const char *path, SoilParameters *params, SoilConfigOptions *config)
 {
     FILE *fp = fopen(path, "r");
     if (!fp) return -1;
@@ -429,13 +429,13 @@ static int load_config_file(const char *path, SoilParameters *par, SoilConfigOpt
         if (!strcmp(key, "soil_depth_m")) {
             config->soil_depth_m = val; config->have_soil_depth_m = 1;
         } else if (!strcmp(key, "soil_Clapp_Hornberger_exponent_b")) {
-            par->b_exp = val;
+            params->b_exp = val;
         } else if (!strcmp(key, "soil_sat_hydraulic_conductivity_cm_per_h")) {
-            par->K_sat_cm_per_h = val;
+            params->K_sat_cm_per_h = val;
         } else if (!strcmp(key, "soil_sat_capillary_head_cm")) {
-            par->phi_sat_cm = val;
+            params->phi_sat_cm = val;
         } else if (!strcmp(key, "soil_effective_porosity")) {
-            par->theta_sat = val;
+            params->theta_sat = val;
         } else if (!strcmp(key, "soil_field_capacity_Pcap_over_Patm_0_1")) {
             config->field_capacity_pressure_ratio = val;
             config->have_field_capacity_pressure_ratio = 1;
@@ -446,9 +446,9 @@ static int load_config_file(const char *path, SoilParameters *par, SoilConfigOpt
             config->wilting_point_moisture_content = val;
             config->have_wilting_point_moisture_content = 1;
         } else if (!strcmp(key, "soil_reservoir_rate_const_to_subsurface_lateral_flow")) {
-            par->klf_m_per_h = val;
+            params->klf_m_per_h = val;
         } else if (!strcmp(key, "soil_to_gw_percolation_rate_limiter_0_to_1")) {
-            par->perc_limiter_0_to_1 = val;
+            params->perc_limiter_0_to_1 = val;
         } else if (!strcmp(key, "state_soil_reservoir_init_storage_m")) {
             config->initial_storage_m = val; config->have_initial_storage_m = 1;
         } else {
@@ -461,17 +461,17 @@ static int load_config_file(const char *path, SoilParameters *par, SoilConfigOpt
     fclose(fp);
 
     if (config->calculate_phi_sat_from_ksat)
-        par->phi_sat_cm = 10.415 * pow(par->K_sat_cm_per_h, -0.3266);
+        params->phi_sat_cm = 10.415 * pow(params->K_sat_cm_per_h, -0.3266);
 
     if (config->have_field_capacity_pressure_ratio) {
         const double atmospheric_pressure_head_cm = 1033.2274528;
         double field_capacity_head_cm =
             config->field_capacity_pressure_ratio * atmospheric_pressure_head_cm;
-        par->theta_fc = (field_capacity_head_cm <= par->phi_sat_cm)
-                      ? par->theta_sat
-                      : par->theta_sat *
-                        pow(par->phi_sat_cm / field_capacity_head_cm, 1.0 / par->b_exp);
-        par->theta_aet_eq_pet = par->theta_fc;
+        params->theta_fc = (field_capacity_head_cm <= params->phi_sat_cm)
+                      ? params->theta_sat
+                      : params->theta_sat *
+                        pow(params->phi_sat_cm / field_capacity_head_cm, 1.0 / params->b_exp);
+        params->theta_aet_eq_pet = params->theta_fc;
     }
 
     /*
@@ -489,7 +489,7 @@ static int load_config_file(const char *path, SoilParameters *par, SoilConfigOpt
      * as for theta_fc).
      */
     if (config->have_wilting_point_moisture_content) {
-        par->theta_wp = config->wilting_point_moisture_content;
+        params->theta_wp = config->wilting_point_moisture_content;
     } else {
         const double atmospheric_pressure_head_cm = 1033.2274528;
         double wilting_point_pressure_ratio = WILTING_POINT_PCAP_OVER_PATM;
@@ -499,29 +499,29 @@ static int load_config_file(const char *path, SoilParameters *par, SoilConfigOpt
             wilting_point_pressure_ratio = config->wilting_point_pressure_ratio;
         }
         wilting_point_head_cm = wilting_point_pressure_ratio * atmospheric_pressure_head_cm;
-        if (wilting_point_head_cm <= par->phi_sat_cm) {
-            par->theta_wp = par->theta_sat;
+        if (wilting_point_head_cm <= params->phi_sat_cm) {
+            params->theta_wp = params->theta_sat;
         } else {
-            par->theta_wp = par->theta_sat *
-                            pow(wilting_point_head_cm / par->phi_sat_cm, -1.0 / par->b_exp);
+            params->theta_wp = params->theta_sat *
+                            pow(wilting_point_head_cm / params->phi_sat_cm, -1.0 / params->b_exp);
         }
     }
     return 0;
 }
 
-static void default_params(SoilParameters *par)
+static void default_params(SoilParameters *params)
 {
-    memset(par, 0, sizeof(*par));
-    par->theta_r = 0.0;
-    par->theta_sat = 0.45;
-    par->theta_fc = 0.30;
-    par->theta_wp = 0.10;
-    par->theta_aet_eq_pet = 0.30;
-    par->K_sat_cm_per_h = 10.0;
-    par->phi_sat_cm = 10.0;
-    par->b_exp = 4.9;
-    par->perc_limiter_0_to_1 = 1.0;
-    par->klf_m_per_h = 0.0;
+    memset(params, 0, sizeof(*params));
+    params->theta_r = 0.0;
+    params->theta_sat = 0.45;
+    params->theta_fc = 0.30;
+    params->theta_wp = 0.10;
+    params->theta_aet_eq_pet = 0.30;
+    params->K_sat_cm_per_h = 10.0;
+    params->phi_sat_cm = 10.0;
+    params->b_exp = 4.9;
+    params->perc_limiter_0_to_1 = 1.0;
+    params->klf_m_per_h = 0.0;
 }
 
 static void default_control(SoilControl *ctrl)
@@ -565,14 +565,14 @@ static void fill_geometry_from_opts(const DriverOpts *o, SoilGeometry *geom)
     }
 
     // Assign to const fields by casting away const here (safe for our process lifetime).
-    memcpy((double*)geom->dz, dz_local, sizeof(dz_local));
-    memcpy((double*)geom->zc, zc_local, sizeof(zc_local));
+    memcpy((double*)geom->dz_m, dz_local, sizeof(dz_local));
+    memcpy((double*)geom->zc_m, zc_local, sizeof(zc_local));
 }
 
 static double soil_depth_from_dz(const SoilGeometry *geom)
 {
     double d = 0.0;
-    for (int i = 0; i < NDISC; i++) d += geom->dz[i];
+    for (int i = 0; i < NDISC; i++) d += geom->dz_m[i];
     return d;
 }
 
@@ -658,7 +658,7 @@ int main(int argc, char **argv)
 
     // Set up control, params, geometry
     SoilControl ctrl;   default_control(&ctrl);
-    SoilParameters par; default_params(&par);
+    SoilParameters params; default_params(&params);
     SoilGeometry geom;  memset((void*)&geom, 0, sizeof(geom));
 
     ctrl.use_ch_lookup_table = opt.use_lut ? 1 : 0;
@@ -678,13 +678,13 @@ int main(int argc, char **argv)
     SoilConfigOptions config;
     memset(&config, 0, sizeof(config));
     if (opt.have_config) {
-        if (load_config_file(opt.config_path, &par, &config))
+        if (load_config_file(opt.config_path, &params, &config))
             die("failed to read soil config file");
         if (opt.verbosity > 0) {
             if (config.have_wilting_point_moisture_content) {
-                fprintf(stdout, "wilting point moisture content (from config) = %.5f\n", par.theta_wp);
+                fprintf(stdout, "wilting point moisture content (from config) = %.5f\n", params.theta_wp);
             } else {
-                fprintf(stdout, "calculated wilting point moisture content = %.5f\n", par.theta_wp);
+                fprintf(stdout, "calculated wilting point moisture content = %.5f\n", params.theta_wp);
             }
         }
     }
@@ -701,8 +701,8 @@ int main(int argc, char **argv)
     SoilLookupTables lut = {0};
     if (opt.use_lut) {
         if (soil_build_ch_lut(opt.lut_n, opt.lut_Theta_min,
-                              par.theta_r, par.theta_sat, par.b_exp,
-                              par.phi_sat_cm, par.K_sat_cm_per_h, &lut) != 0)
+                              params.theta_r, params.theta_sat, params.b_exp,
+                              params.phi_sat_cm, params.K_sat_cm_per_h, &lut) != 0)
         {
             die("Failed to build LUT");
         }
@@ -717,13 +717,13 @@ int main(int argc, char **argv)
         // Hydrostatic from specified water table depth
         double z_wt = opt.init_wt_depth_m;
         for (int i = 0; i < NDISC; i++) {
-            double z = geom.zc[i];
-            double phi_sat_m = par.phi_sat_cm / 100.0;
+            double z = geom.zc_m[i];
+            double phi_sat_m = params.phi_sat_cm / 100.0;
             double z_cf_top = z_wt - phi_sat_m;
-            if (z >= z_cf_top) theta[i] = par.theta_sat;
+            if (z >= z_cf_top) theta[i] = params.theta_sat;
             else {
                 double psi_m = z_wt - z; if (psi_m < 0.0) psi_m = 0.0;
-                theta[i] = theta_from_psi(psi_m, par.theta_sat, par.phi_sat_cm, par.b_exp);
+                theta[i] = theta_from_psi(psi_m, params.theta_sat, params.phi_sat_cm, params.b_exp);
             }
         }
     } else if (opt.use_init_target_storage || config.have_initial_storage_m) {
@@ -732,8 +732,8 @@ int main(int argc, char **argv)
                                 : config.initial_storage_m;
         double zwt;
         initialize_hydrostatic_from_storage(soil_depth_m,
-                                            par.theta_sat, par.phi_sat_cm, par.b_exp,
-                                            geom.zc, target_storage_m, &zwt, theta);
+                                            params.theta_sat, params.phi_sat_cm, params.b_exp,
+                                            geom.zc_m, target_storage_m, &zwt, theta);
         if (opt.verbosity > 0)
             fprintf(stdout, "Initialized hydrostatic z_wt = %.6f m from target storage %.10g m\n",
                     zwt, target_storage_m);
@@ -744,13 +744,13 @@ int main(int argc, char **argv)
     // Compute initial psi/K
     compute_props_with_option_stateless(opt.use_lut ? &lut : NULL,
                                         theta, psi_init, K_init,
-                                        par.theta_r, par.theta_sat,
-                                        par.K_sat_cm_per_h, par.phi_sat_cm, par.b_exp,
+                                        params.theta_r, params.theta_sat,
+                                        params.K_sat_cm_per_h, params.phi_sat_cm, params.b_exp,
                                         hint);
 
     double initial_soil_volume_m = 0.0;
     for (int i = 0; i < NDISC; i++) {
-        initial_soil_volume_m += theta[i] * geom.dz[i];
+        initial_soil_volume_m += theta[i] * geom.dz_m[i];
     }
 
     // Outputs
@@ -882,7 +882,7 @@ int main(int argc, char **argv)
         int rc;
         if (!strcmp(opt.solver, "noahmp")) {
             rc = noahmp_soil_step_one_hour_stateless(
-                &ctrl, &geom, &par,
+                &ctrl, &geom, &params,
                 &sin, &forcing, &sout, &flux, &volbal, NULL);
             if (rc == 4) die("noahmp_soil_step_one_hour_stateless: invalid noahmp_fidelity");
             if (rc == 5) die("noahmp_soil_step_one_hour_stateless: field-capacity "
@@ -890,7 +890,7 @@ int main(int argc, char **argv)
             if (rc != 0) die("noahmp_soil_step_one_hour_stateless failed");
         } else {
             rc = soil_step_one_hour_stateless(
-                &ctrl, &geom, &par, (opt.use_lut ? &lut : NULL),
+                &ctrl, &geom, &params, (opt.use_lut ? &lut : NULL),
                 &sin, &forcing, &sout, &flux, &volbal);
             if (rc != 0) die("soil_step_one_hour_stateless failed");
         }
@@ -903,8 +903,8 @@ int main(int argc, char **argv)
 
         compute_props_with_option_stateless(opt.use_lut ? &lut : NULL,
             theta, psi_init, K_init,
-            par.theta_r, par.theta_sat,
-            par.K_sat_cm_per_h, par.phi_sat_cm, par.b_exp,
+            params.theta_r, params.theta_sat,
+            params.K_sat_cm_per_h, params.phi_sat_cm, params.b_exp,
             hint);
 
         // Accumulate simulation volume-balance terms
@@ -968,7 +968,7 @@ int main(int argc, char **argv)
 
     double final_soil_volume_m = 0.0;
     for (int i = 0; i < NDISC; i++) {
-        final_soil_volume_m += theta[i] * geom.dz[i];
+        final_soil_volume_m += theta[i] * geom.dz_m[i];
     }
 
     double volume_balance_residual_m =
