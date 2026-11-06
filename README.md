@@ -129,6 +129,33 @@ the original solver:
 The two formulations can therefore be run with the same forcing, soil
 hydraulic parameters, discretization, and initial soil-moisture storage.
 
+### Noah-MP fidelity
+
+Noah-MP has no lateral subsurface flow (the DSBM lateral flow is
+entirely conceptual) and no field-capacity percolation threshold.  The
+comparison kernel therefore has two fidelities:
+
+``` text
+--noahmp-fidelity 1    Noah-MP as written (default): no lateral flow;
+                       --apply-fc-perc-threshold is refused with an error
+--noahmp-fidelity 2    testing only, for 1:1 comparison with DSBM: adds
+                       the DSBM lateral flow as a sink in the Richards
+                       solve and permits --apply-fc-perc-threshold
+```
+
+At fidelity 2 the lateral flow uses the same linear reservoir and the
+same scheme as DSBM: the exact exponential solution by default, or the
+capped forward-Euler step with `--lateral-forward-euler`.  It is
+integrated over each Noah-MP fine step from the soil moisture at the
+start of the step.  Fidelity 2 with `--lateral-forward-euler`
+reproduces the Noah-MP comparison output made before the fidelity
+option was added (FLO 11/06/2026), when the forward-Euler lateral sink
+was always applied.  Fidelity 2 is never intended for production use.
+
+In both fidelities the transpiration demand uses the DSBM PET and
+root-zone stress rule, so that the comparison isolates the vertical
+soil-moisture solver.
+
 Select the formulation with:
 
 ``` text
@@ -161,11 +188,15 @@ changes the lower-boundary treatment so that percolation occurs only
 from soil moisture above field capacity and removal of percolating water
 does not reduce the bottom-disc moisture below `theta_fc`.
 
-For Noah-MP, this switch is an experimental comparison option. It is
-**not** the native free-drainage behavior represented by the Noah-MP
-`OPT_RUN = 3` and `OPT_RUN = 7` soil-moisture paths associated with the
-Schaake and Xinanjiang surface-water partitioning configurations used by
-the National Water Model.
+The threshold is off by default in both formulations, because it is
+**not** part of Noah-MP: it is not the native free-drainage behavior of
+the Noah-MP `OPT_RUN = 3` and `OPT_RUN = 7` soil-moisture paths
+associated with the Schaake and Xinanjiang surface-water partitioning
+configurations used by the National Water Model.  Keeping it off keeps
+DSBM, and through it CFE, equivalent to Noah-MP as applied in the
+current NWM.  Near field capacity the conductivity K(theta_fc) is small,
+so free drainage tapers off smoothly without it.  For Noah-MP the
+switch is a testing option accepted only with `--noahmp-fidelity 2`.
 
 The option is retained because it permits controlled comparisons of DSBM
 and Noah-MP under either lower-boundary assumption. See also
@@ -197,7 +228,10 @@ numerical configurations.
 
 The comparison figures and summaries in `results/` were produced before
 the current defaults (fixed 4 DSBM substeps, exact exponential lateral
-removal, computed wilting point) were adopted. They can be reproduced exactly; see
+removal, computed wilting point, equal-head limit on downward transfers,
+Noah-MP fidelity option) were adopted.  Their Noah-MP runs used the
+forward-Euler lateral sink, which is now Noah-MP fidelity 2 with
+`--lateral-forward-euler`.  See
 [Reproducing the original DSBM output](#reproducing-the-original-dsbm-output).
 
 ## Repository layout
@@ -230,8 +264,9 @@ removal, computed wilting point) were adopted. They can be reproduced exactly; s
 |-- run_dsbm.csh                         DSBM, lookup table
 |-- run_dsbm_analytic.csh                DSBM, analytic Clapp-Hornberger
 |-- run_dsbm_fc_limit.csh                DSBM, field-capacity percolation threshold
-|-- run_noahmp.csh                       Noah-MP
-|-- run_noahmp_fc_limit.csh              Noah-MP, field-capacity percolation threshold
+|-- run_noahmp.csh                       Noah-MP fidelity 2 (DSBM lateral flow), for 1:1 comparison
+|-- run_noahmp_fc_limit.csh              Noah-MP fidelity 2, field-capacity percolation threshold
+|-- run_noahmp_fidelity1.csh             Noah-MP fidelity 1, Noah-MP as written
 |-- tools/
 |   |-- run_branch_census.csh            branch-activity census
 |   `-- run_nsub_timing.csh              substep count versus cost and results
@@ -298,7 +333,7 @@ make census
 
 ## Running the comparison
 
-Five convenience scripts are supplied:
+Six convenience scripts are supplied:
 
 ``` text
 run_dsbm.csh
@@ -306,11 +341,13 @@ run_dsbm_analytic.csh
 run_noahmp.csh
 run_dsbm_fc_limit.csh
 run_noahmp_fc_limit.csh
+run_noahmp_fidelity1.csh
 ```
 
 The first group runs the conductivity-based lower-boundary comparison
 (`run_dsbm.csh` uses the Clapp-Hornberger lookup table,
-`run_dsbm_analytic.csh` the analytic functions):
+`run_dsbm_analytic.csh` the analytic functions; `run_noahmp.csh` runs
+Noah-MP at fidelity 2, with the DSBM lateral flow):
 
 ``` bash
 ./run_dsbm.csh
@@ -319,12 +356,15 @@ The first group runs the conductivity-based lower-boundary comparison
 ```
 
 The second pair applies the optional field-capacity percolation
-threshold to both formulations:
+threshold to both formulations (Noah-MP at fidelity 2):
 
 ``` bash
 ./run_dsbm_fc_limit.csh
 ./run_noahmp_fc_limit.csh
 ```
+
+`run_noahmp_fidelity1.csh` runs Noah-MP as written, with no lateral
+flow.  It is not a 1:1 comparison with DSBM.
 
 The scripts use the same uniform soil hydraulic properties, vertical
 discretization, forcing, and initial total soil-moisture storage so that
@@ -353,6 +393,19 @@ and, for DSBM runs, these options:
 --nsub 0 --lateral-forward-euler
 ```
 
+and, for Noah-MP runs, these options:
+
+``` text
+--noahmp-fidelity 2 --lateral-forward-euler
+```
+
+The Noah-MP theta, flux, and volume-balance time series should then
+match commit `1a8d1e2` byte for byte, with and without
+`--apply-fc-perc-threshold` (the equal-head limit is a DSBM change and
+does not affect Noah-MP); the summary file adds one line reporting the
+fidelity.  `tools/check_regression.csh` checks this against an earlier
+commit.
+
 Before the equal-head limit on downward transfers was added, the output
 then matched the code at commit `1a8d1e2` byte for byte (theta, flux,
 and volume-balance time series, and the summary file apart from its
@@ -380,7 +433,9 @@ bin/soil_driver \
     --zc 0.05,0.25,0.7,1.5
 ```
 
-For the corresponding Noah-MP calculation, use `--solver noahmp`.
+For the corresponding Noah-MP calculation, use `--solver noahmp
+--noahmp-fidelity 2` (fidelity 2 adds the DSBM lateral flow; see
+[Noah-MP fidelity](#noah-mp-fidelity)).
 
 DSBM additionally supports a Clapp-Hornberger lookup table:
 

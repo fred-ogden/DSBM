@@ -106,7 +106,14 @@ static void usage(const char *prog)
         "Options:\n"
         "  --config <file>                Soil parameter configuration file.\n"
         "  --solver <dsbm|noahmp>          Soil solver (default dsbm).\n"
+        "  --noahmp-fidelity <1|2>         Noah-MP only.  1 (default): Noah-MP as written,\n"
+        "                                 no lateral flow, no field-capacity percolation\n"
+        "                                 threshold.  2: testing only, for 1:1 comparison\n"
+        "                                 with DSBM: adds the DSBM lateral flow and permits\n"
+        "                                 --apply-fc-perc-threshold.\n"
         "  --apply-fc-perc-threshold       Restrict bottom drainage to water above theta_fc.\n"
+        "                                 Not part of Noah-MP: with --solver noahmp it\n"
+        "                                 requires --noahmp-fidelity 2.\n"
         "  --nsub <int>                   DSBM substeps per timestep: N > 0 fixes the\n"
         "                                 count at N; 0 selects the original adaptive\n"
         "                                 choice.  Default: fixed at 4.\n"
@@ -115,9 +122,10 @@ static void usage(const char *prog)
         "  --substep-lateral-severity     DSBM, with --nsub 0: adaptive substep count\n"
         "                                 also limits the lateral removal fraction per\n"
         "                                 substep.\n"
-        "  --lateral-forward-euler        DSBM: use the legacy forward-Euler lateral\n"
-        "                                 removal instead of the default exact\n"
-        "                                 exponential solution within each substep.\n"
+        "  --lateral-forward-euler        DSBM, and Noah-MP fidelity 2: use the legacy\n"
+        "                                 forward-Euler lateral removal instead of the\n"
+        "                                 default exact exponential solution within\n"
+        "                                 each substep.\n"
         "  --verbosity <int>              0 silent, 1 step volume balance, >1 detailed (default 1).\n"
         "  --write-theta                  Write theta_timeseries.csv (comma delimited).\n"
         "  --write-fluxes                 Write fluxes_timeseries.csv (comma delimited).\n"
@@ -202,6 +210,7 @@ static void default_opts(DriverOpts *o)
     o->lut_Theta_min = 1e-6;
     o->timecol = TC_DATETIME;   // NEW
     strcpy(o->solver, "dsbm");
+    o->noahmp_fidelity = NOAHMP_FIDELITY_AS_WRITTEN;
     o->timestep_start = 0;           // NEW
     o->forcing_path[0] = '\0';
     o->outdir[0] = '\0';
@@ -254,6 +263,14 @@ int parse_args(int argc, char **argv, DriverOpts *o)
             if (strcmp(solver, "dsbm") && strcmp(solver, "noahmp")) return -1;
             strncpy(o->solver, solver, sizeof(o->solver)-1);
             o->solver[sizeof(o->solver)-1] = '\0';
+        } else if (!strcmp(a, "--noahmp-fidelity") && i+1 < argc) {
+            if (parse_int(argv[++i], &o->noahmp_fidelity)) return -1;
+            if (o->noahmp_fidelity != NOAHMP_FIDELITY_AS_WRITTEN &&
+                o->noahmp_fidelity != NOAHMP_FIDELITY_DSBM_TESTING) {
+                fprintf(stderr, "ERROR: --noahmp-fidelity must be 1 or 2.\n");
+                return -1;
+            }
+            o->have_noahmp_fidelity = 1;
         } else if (!strcmp(a, "--apply-fc-perc-threshold")) {
             o->apply_fc_perc_threshold = 1;
         } else if (!strcmp(a, "--nsub") && i+1 < argc) {
@@ -318,6 +335,27 @@ int parse_args(int argc, char **argv, DriverOpts *o)
     if (!o->use_init_wt_depth && !o->use_init_target_storage && !o->have_config) {
         fprintf(stderr, "Initialization is required on the command line or in --config.\n");
         return -1;
+    }
+
+    // Noah-MP fidelity checks (FLO 11/06/2026).
+    if (o->have_noahmp_fidelity && strcmp(o->solver, "noahmp")) {
+        fprintf(stderr, "ERROR: --noahmp-fidelity applies only to --solver noahmp.\n");
+        return -1;
+    }
+    if (!strcmp(o->solver, "noahmp") &&
+        o->noahmp_fidelity == NOAHMP_FIDELITY_AS_WRITTEN) {
+        if (o->apply_fc_perc_threshold) {
+            fprintf(stderr,
+                    "ERROR: --apply-fc-perc-threshold is not part of Noah-MP; with\n"
+                    "       --solver noahmp it requires --noahmp-fidelity 2 (testing only).\n");
+            return -1;
+        }
+        if (o->lateral_scheme == LATERAL_SCHEME_FORWARD_EULER) {
+            fprintf(stderr,
+                    "ERROR: --lateral-forward-euler selects a lateral flow scheme, but\n"
+                    "       Noah-MP fidelity 1 has no lateral flow; use --noahmp-fidelity 2.\n");
+            return -1;
+        }
     }
     return 0;
 }
@@ -497,6 +535,7 @@ static void default_control(SoilControl *ctrl)
     ctrl->n_sub_minimum = 0;           // no floor on adaptive substeps unless requested
     ctrl->substep_lateral_severity = 0;// adaptive substeps ignore lateral rate unless requested
     ctrl->lateral_scheme = LATERAL_SCHEME_EXPONENTIAL; // unless --lateral-forward-euler
+    ctrl->noahmp_fidelity = NOAHMP_FIDELITY_AS_WRITTEN; // unless --noahmp-fidelity 2
     ctrl->dt_hours = 1.0;
 }
 
@@ -634,6 +673,7 @@ int main(int argc, char **argv)
     ctrl.n_sub_minimum = opt.n_sub_minimum;
     ctrl.substep_lateral_severity = opt.substep_lateral_severity;
     ctrl.lateral_scheme = opt.lateral_scheme;
+    ctrl.noahmp_fidelity = opt.noahmp_fidelity;
 
     SoilConfigOptions config;
     memset(&config, 0, sizeof(config));
@@ -844,6 +884,9 @@ int main(int argc, char **argv)
             rc = noahmp_soil_step_one_hour_stateless(
                 &ctrl, &geom, &par,
                 &sin, &forcing, &sout, &flux, &volbal, NULL);
+            if (rc == 4) die("noahmp_soil_step_one_hour_stateless: invalid noahmp_fidelity");
+            if (rc == 5) die("noahmp_soil_step_one_hour_stateless: field-capacity "
+                             "percolation threshold requires Noah-MP fidelity 2");
             if (rc != 0) die("noahmp_soil_step_one_hour_stateless failed");
         } else {
             rc = soil_step_one_hour_stateless(
@@ -938,7 +981,15 @@ int main(int argc, char **argv)
         double mean_subtimesteps = (n_steps > 0)
             ? (double)total_subtimesteps / (double)n_steps : 0.0;
 
-        fprintf(fp_sum, "Solver: %s\n\n", solver_name);
+        fprintf(fp_sum, "Solver: %s\n", solver_name);
+        if (!strcmp(opt.solver, "noahmp")) {
+            if (opt.noahmp_fidelity == NOAHMP_FIDELITY_DSBM_TESTING) {
+                fprintf(fp_sum, "Noah-MP fidelity: 2 (testing only: DSBM lateral flow added)\n");
+            } else {
+                fprintf(fp_sum, "Noah-MP fidelity: 1 (Noah-MP as written)\n");
+            }
+        }
+        fprintf(fp_sum, "\n");
         fprintf(fp_sum, "**************** %s SOIL VOLUME BALANCE ****************\n\n", solver_name);
         fprintf(fp_sum, " Initial soil volume                    = %10.4f m\n", initial_soil_volume_m);
         fprintf(fp_sum, " Precipitation input (QINSUR)            = %10.4f m\n", cum_input_rain_m);

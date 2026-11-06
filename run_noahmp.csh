@@ -1,5 +1,9 @@
 #!/bin/tcsh
-# Run the stateless Noah-MP soil-water formulation with full output
+# Run the stateless Noah-MP soil-moisture formulation with full output,
+# at Noah-MP fidelity 2 (testing only): Noah-MP plus the DSBM exact
+# exponential lateral subsurface flow, for 1:1 comparison with
+# run_dsbm.csh and run_dsbm_analytic.csh.  Noah-MP as written (no
+# lateral flow) is run_noahmp_fidelity1.csh.  FLO 11/06/2026
 
 set force   = "forcing/rain_pet_example.csv"
 set outdir  = "output/noahmp"
@@ -14,12 +18,13 @@ mkdir -p "$outdir"
 bin/soil_driver \
   --config configs/soil_params.dat \
   --solver noahmp \
+  --noahmp-fidelity 2 \
   --forcing "$force" \
   --outdir "$outdir" \
   --verbosity $verb \
   --write-theta --write-fluxes --write-volbal \
   --timestamp $timecol \
-  --dz "$dz" --zc "$zc" \
+  --dz "$dz" --zc "$zc"
 
 set run_status = $status
 

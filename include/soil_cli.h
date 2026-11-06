@@ -53,8 +53,12 @@ typedef struct {
     int  nsub;                    /* DSBM: --nsub value: 0 = adaptive, >0 = fixed count */
     int  n_sub_minimum;           /* DSBM: floor on adaptive substeps (0 = none) */
     int  substep_lateral_severity;/* DSBM: 1 = adaptive substeps consider lateral rate */
-    int  lateral_scheme;          /* DSBM: LATERAL_SCHEME_EXPONENTIAL (default) or
+    int  lateral_scheme;          /* DSBM, and Noah-MP fidelity 2:
+                                     LATERAL_SCHEME_EXPONENTIAL (default) or
                                      LATERAL_SCHEME_FORWARD_EULER */
+    int  have_noahmp_fidelity;    /* Noah-MP: 1 if --noahmp-fidelity was given */
+    int  noahmp_fidelity;         /* Noah-MP: NOAHMP_FIDELITY_AS_WRITTEN (1, default)
+                                     or NOAHMP_FIDELITY_DSBM_TESTING (2) */
 
     /* initialisation */
     int  use_init_wt_depth;

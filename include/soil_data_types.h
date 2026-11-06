@@ -41,6 +41,21 @@ extern "C" {
 #define N_SUB_SETTING_DEFAULT     0   // use N_SUB_DEFAULT_COUNT
 #define N_SUB_SETTING_ADAPTIVE   (-1) // original adaptive substep choice
 
+// Noah-MP comparison kernel fidelity (SoilControl.noahmp_fidelity).
+// FLO 11/06/2026:
+//   1  Noah-MP as written: no lateral subsurface flow (Noah-MP has none;
+//      the DSBM lateral flow is entirely conceptual) and no field-capacity
+//      percolation threshold (not part of Noah-MP as applied in the
+//      current National Water Model, NWM).  This is the default.
+//   2  Testing only, for 1:1 comparison with DSBM: adds the DSBM lateral
+//      subsurface flow (SoilControl.lateral_scheme selects exponential or
+//      forward Euler, as in DSBM) and permits apply_fc_perc_threshold.
+// Any other value is an error, so a zero-initialized SoilControl must set
+// it explicitly before calling the Noah-MP comparison kernel.  The DSBM
+// kernel ignores this field.
+#define NOAHMP_FIDELITY_AS_WRITTEN      1
+#define NOAHMP_FIDELITY_DSBM_TESTING    2
+
 // Downward Darcy-Buckingham transfers between discs are always limited so
 // that they cannot overshoot equal total hydraulic head (see
 // limit_downward_transfer_to_equal_head() in soil_helpers.c).  FLO 11/06/2026:
@@ -62,6 +77,9 @@ typedef struct {
     int    substep_lateral_severity; // adaptive only: 1 => also consider lateral removal rate
     int    lateral_scheme;        // LATERAL_SCHEME_EXPONENTIAL (0, default) or
                                   // LATERAL_SCHEME_FORWARD_EULER (1)
+    int    noahmp_fidelity;       // Noah-MP comparison kernel only:
+                                  // NOAHMP_FIDELITY_AS_WRITTEN (1) or
+                                  // NOAHMP_FIDELITY_DSBM_TESTING (2); see above
     double dt_hours;              // usually 1.0
 } SoilControl;
 

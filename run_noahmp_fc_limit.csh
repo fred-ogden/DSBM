@@ -1,5 +1,9 @@
 #!/bin/tcsh
-# Run the stateless Noah-MP soil-water formulation with full output
+# Run the stateless Noah-MP soil-moisture formulation with full output,
+# at Noah-MP fidelity 2 (testing only) with the field-capacity
+# percolation threshold, for 1:1 comparison with run_dsbm_fc_limit.csh.
+# Neither the DSBM lateral flow nor the threshold is part of Noah-MP;
+# fidelity 1 refuses the threshold.  FLO 11/06/2026
 
 set force   = "forcing/rain_pet_example.csv"
 set outdir  = "output/noahmp_fc_limit"
@@ -14,13 +18,14 @@ mkdir -p "$outdir"
 bin/soil_driver \
   --config configs/soil_params.dat \
   --solver noahmp \
+  --noahmp-fidelity 2 \
   --apply-fc-perc-threshold \
   --forcing "$force" \
   --outdir "$outdir" \
   --verbosity $verb \
   --write-theta --write-fluxes --write-volbal \
   --timestamp $timecol \
-  --dz "$dz" --zc "$zc" 
+  --dz "$dz" --zc "$zc"
 
 set run_status = $status
 
