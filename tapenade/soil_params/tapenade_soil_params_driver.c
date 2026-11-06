@@ -144,14 +144,19 @@ void soil_cost_adjoint_from_tapenade(const double parameters[5],
 #define B_EXP_KNOWN                 4.05
 #define THETA_SAT_KNOWN             0.439
 
-/* calibration bounds */
+/* calibration bounds.  FLO 11/06/2026: Ksat <= 30 cm/h (300 mm/h, above
+   any expected rain rate; with the flux upper boundary of Noah-MP as used
+   in WRF-Hydro, all rain is forced in anyway) and b >= 3 (below b of
+   about 2.5 the calculated wilting point falls under the dry-end soil
+   moisture limit, 0.03 theta_sat).  Were 100 cm/h and 2, both
+   physically implausible. */
 #define KLF_LOWER_BOUND_M_PER_H     1.0e-5
 #define KLF_UPPER_BOUND_M_PER_H     1.0
 #define PERC_LIMITER_LOWER_BOUND    0.01
 #define PERC_LIMITER_UPPER_BOUND    0.999
 #define K_SAT_LOWER_BOUND_CM_PER_H  0.01
-#define K_SAT_UPPER_BOUND_CM_PER_H  100.0
-#define B_EXP_LOWER_BOUND           2.0
+#define K_SAT_UPPER_BOUND_CM_PER_H  30.0
+#define B_EXP_LOWER_BOUND           3.0
 #define B_EXP_UPPER_BOUND           15.0
 
 static const double disc_center_depth_m[NDISC] = {0.05, 0.25, 0.70, 1.50};

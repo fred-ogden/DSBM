@@ -23,7 +23,8 @@
 # bounds clamped by the E10 BFGS search
 # (tapenade/soil_params/tapenade_soil_params_driver.c):
 #   k_lf 1e-5 to 1 m/h, perc_limiter 0.01 to 0.999,
-#   Ksat 0.01 to 100 cm/h, b 2 to 15.
+#   Ksat 0.01 to 30 cm/h, b 3 to 15
+# (FLO 11/06/2026: were Ksat 100 cm/h and b 2, physically implausible).
 # Replace the list with your calibration bounds as needed.
 #
 # Usage, from the repository root (or from tools/ as ./run_equal_head_census.csh):
@@ -53,10 +54,10 @@ set zc          = "0.05,0.25,0.7,1.5"
 # parameter sets: "k_lf perc_limiter Ksat b"
 set parameter_sets = ( \
     "0.000005 0.81 1.2168 4.05" \
-    "1e-5 0.01 0.01 2"    "1e-5 0.01 0.01 15"    "1e-5 0.01 100 2"    "1e-5 0.01 100 15" \
-    "1e-5 0.999 0.01 2"   "1e-5 0.999 0.01 15"   "1e-5 0.999 100 2"   "1e-5 0.999 100 15" \
-    "1 0.01 0.01 2"       "1 0.01 0.01 15"       "1 0.01 100 2"       "1 0.01 100 15" \
-    "1 0.999 0.01 2"      "1 0.999 0.01 15"      "1 0.999 100 2"      "1 0.999 100 15" )
+    "1e-5 0.01 0.01 3"    "1e-5 0.01 0.01 15"    "1e-5 0.01 30 3"    "1e-5 0.01 30 15" \
+    "1e-5 0.999 0.01 3"   "1e-5 0.999 0.01 15"   "1e-5 0.999 30 3"   "1e-5 0.999 30 15" \
+    "1 0.01 0.01 3"       "1 0.01 0.01 15"       "1 0.01 30 3"       "1 0.01 30 15" \
+    "1 0.999 0.01 3"      "1 0.999 0.01 15"      "1 0.999 30 3"      "1 0.999 30 15" )
 
 set klf_key  = "soil_reservoir_rate_const_to_subsurface_lateral_flow"
 set perc_key = "soil_to_gw_percolation_rate_limiter_0_to_1"

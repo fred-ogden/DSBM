@@ -49,15 +49,16 @@ set head_spec      = "equal_head_check_primal(limited_transfer_m)/(transfer_requ
 set sources        = "equal_head_check_primal.c soil_helpers.c"
 set cflags         = "-std=c11 -O2 -Wall -Wextra -DNDISC=$ndisc"
 # parameter sets "k_lf perc_limiter Ksat b": the config values, then the
-# E10-bound corners in which tools/run_equal_head_census.csh found the
-# limiter on the Newton path (census sets 4, 5, 9, 13, 17)
+# 8 corners of the E10 bounds with Ksat at its upper bound (high Ksat is
+# where tools/run_equal_head_census.csh found the limiter on the Newton
+# path).  FLO 11/06/2026: bounds now Ksat <= 30 cm/h and b >= 3 (were
+# 100 cm/h and 2).
 set parameter_sets = ( \
     "0.000005 0.81 1.2168 4.05" \
-    "1e-5 0.01 100 2" \
-    "1e-5 0.01 100 15" \
-    "1e-5 0.999 100 15" \
-    "1 0.01 100 15" \
-    "1 0.999 100 15" )
+    "1e-5 0.01 30 3"    "1e-5 0.01 30 15" \
+    "1e-5 0.999 30 3"   "1e-5 0.999 30 15" \
+    "1 0.01 30 3"       "1 0.01 30 15" \
+    "1 0.999 30 3"      "1 0.999 30 15" )
 
 if ( ! -f $forcing ) then
     echo "ERROR: $forcing not found"
