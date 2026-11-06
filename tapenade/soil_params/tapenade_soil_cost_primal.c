@@ -220,6 +220,7 @@ void dsbm_soil_cost_from_params(double klf_m_per_h,
     ctrl.n_sub_minimum = 0;
     ctrl.substep_lateral_severity = 0;
     ctrl.lateral_scheme = LATERAL_SCHEME_EXPONENTIAL;
+    ctrl.rain_input_scheme = RAIN_INPUT_SCHEME_CASCADE;  /* infiltration flux upper boundary, TRUE (FLO 11/06/2026) */
     // The equal-head limiter on downward transfers is always active in the
     // kernel (FLO 11/06/2026: no selection field remains).
 
@@ -330,6 +331,7 @@ void dsbm_soil_series_from_params(double klf_m_per_h,
     ctrl.n_sub_minimum = 0;
     ctrl.substep_lateral_severity = 0;
     ctrl.lateral_scheme = LATERAL_SCHEME_EXPONENTIAL;
+    ctrl.rain_input_scheme = RAIN_INPUT_SCHEME_CASCADE;  /* infiltration flux upper boundary, TRUE (FLO 11/06/2026) */
     // Same kernel, so the synthetic observations also use the equal-head
     // limiter, matching the differentiated primal model.
 

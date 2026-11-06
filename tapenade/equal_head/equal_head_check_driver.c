@@ -239,6 +239,7 @@ static int run_record(long n_hours, double klf_m_per_h, double perc_limiter,
     ctrl.apply_fc_perc_threshold = 0;
     ctrl.n_sub_setting = N_SUB_SETTING_DEFAULT;   /* fixed 4 substeps */
     ctrl.lateral_scheme = LATERAL_SCHEME_EXPONENTIAL;
+    ctrl.rain_input_scheme = RAIN_INPUT_SCHEME_CASCADE;  /* infiltration flux upper boundary, TRUE (FLO 11/06/2026) */
     ctrl.noahmp_fidelity = NOAHMP_FIDELITY_AS_WRITTEN;  /* unused by DSBM */
     ctrl.dt_hours = 1.0;
 

@@ -33,7 +33,8 @@
 /* ---- once per substep ---- */
 #define CENSUS_SUBSTEP               5
 #define CENSUS_RAIN                  6   /* rain this substep */
-#define CENSUS_RAIN_CAPPED           7   /* rain exceeded disc-0 storage space: surface excess */
+#define CENSUS_RAIN_CAPPED           7   /* rain overflowed disc 0 (excess only if TOP_DISC_ONLY,
+                                            or if every disc is saturated) */
 
 /* ---- per interface, per substep (index = upper disc of the interface) ---- */
 #define CENSUS_FLUX_DOWN             8   /* Darcy-Buckingham flux downward */
@@ -80,7 +81,11 @@
 #define CENSUS_AT_DRY_LIMIT         31   /* theta at the kernel floor (CH_SCALED_SOIL_MOISTURE_MIN
                                             theta_sat, or theta_r if > 0) after the safety clamp */
 
-#define CENSUS_N_EVENTS             32
+/* ---- rain input, FLO 11/06/2026 ---- */
+#define CENSUS_RAIN_INTO_DISC       32   /* per disc: rain entered this disc this substep */
+#define CENSUS_RAIN_EXCESS          33   /* rain left over as surface excess this substep */
+
+#define CENSUS_N_EVENTS             34
 
 /*
  * The hook supplies its own semicolon and is written in the kernel

@@ -49,7 +49,7 @@ static const CensusEventInfo census_event_info[CENSUS_N_EVENTS] = {
     {"wp_cross_up",       "disc crossed theta_wp upward over the hour",     PER_DISC_TIMESTEP, 1},
     {"substep",           "substeps",                                       PER_SUBSTEP,       0},
     {"rain",              "substeps with rain",                             PER_SUBSTEP,       0},
-    {"rain_capped",       "rain exceeded disc-1 space (surface excess)",    PER_SUBSTEP,       0},
+    {"rain_capped",       "rain overflowed disc 1 (top disc)",              PER_SUBSTEP,       0},
     {"flux_down",         "Darcy-Buckingham flux downward",                 PER_INTERFACE_SUB, 1},
     {"flux_up",           "Darcy-Buckingham flux upward",                   PER_INTERFACE_SUB, 1},
     {"chain_cap",         "downward pass limited by downstream acceptance", PER_INTERFACE_SUB, 1},
@@ -73,7 +73,9 @@ static const CensusEventInfo census_event_info[CENSUS_N_EVENTS] = {
     {"eq_head_late_bisect", "bisection step in last 5 limiter iterations (count, not %)", PER_SUBSTEP, 0},
     {"eq_head_call",      "limiter called, positive request (count, not %)", PER_SUBSTEP,      0},
     {"eq_head_prescreen", "limiter pre-screen: no psi needed (count, not %)", PER_SUBSTEP,      0},
-    {"at_dry_limit",      "theta at the dry-end floor after a substep",     PER_DISC_SUB,      1}
+    {"at_dry_limit",      "theta at the dry-end floor after a substep",     PER_DISC_SUB,      1},
+    {"rain_into_disc",    "rain entered this disc",                         PER_DISC_SUB,      1},
+    {"rain_excess",       "rain left over as surface excess",               PER_SUBSTEP,       0}
 };
 
 static long long census_count[CENSUS_N_EVENTS][CENSUS_MAX_INDEX];

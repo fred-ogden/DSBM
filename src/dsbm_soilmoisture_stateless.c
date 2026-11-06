@@ -214,9 +214,12 @@ int soil_step_one_hour_stateless(
 
     // ---- D1 rainfall ----
     double rain_sub;             // rainfall this substep (m)
-    double cap1;                 // free storage of disc 0 (m)
-    double used;                 // rainfall entering disc 0 (m)
-    double excess;               // rainfall rejected by disc 0 (m)
+    double cap1;                 // free storage of the receiving disc (m)
+    double used;                 // rainfall entering the soil this substep (m)
+    double excess;               // rainfall rejected by the soil this substep (m)
+    int n_rain_receiving_discs;  // discs rain may enter: ndisc (cascade) or 1
+    double rain_into_disc_m;     // rainfall entering disc d this substep (m)
+    double remaining_rain_m;     // rainfall not yet placed this substep (m)
 
     // ---- D3 interface flux ----
     double q;                    // Darcy-Buckingham flux (m/h), > 0 downward
@@ -288,6 +291,11 @@ int soil_step_one_hour_stateless(
     ndisc = control->ndisc;
     nintf = ndisc - 1;
     delta_t_h   = control->dt_hours;
+
+    // Discs rain may enter in step D1 (see RAIN_INPUT_SCHEME_* in
+    // soil_data_types.h).  FLO 11/06/2026.
+    n_rain_receiving_discs = ndisc;
+    if (control->rain_input_scheme == RAIN_INPUT_SCHEME_TOP_DISC_ONLY) n_rain_receiving_discs = 1;
 
     rain_rate_m_per_h = forcing->rain_mm_per_h / 1000.0;
     pet_rate_m_per_h  = forcing->pet_mm_per_h  / 1000.0;
@@ -371,28 +379,55 @@ int soil_step_one_hour_stateless(
     // Here we only track infiltrated vs excess for the step.
     // Loop over substeps
     for (substep = 0; substep < n_substeps; substep++) {
-        // D1) rainfall into disc 0
+        // D1) rainfall into the discs.  FLO 11/06/2026: infiltration is a
+        // flux upper boundary condition (RAIN_INPUT_SCHEME_CASCADE, as in
+        // CFE3.1 and WRF-Hydro Noah-MP): fill disc 0 to saturation, then
+        // disc 1, 2, ...; only rain that finds every disc saturated is
+        // excess.  RAIN_INPUT_SCHEME_TOP_DISC_ONLY is DSBM's original form
+        // (disc 0 only; the rest is infiltration excess), kept for testing;
+        // its arithmetic is unchanged.  Fixed loop count, for Tapenade.
         rain_sub = rain_rate_m_per_h * dt_sub;  // m
-        cap1     = (params->theta_sat - theta[0]) * geom->dz_m[0];
-        if (cap1 < 0.0) cap1 = 0.0;
-
-        used   = rain_sub;
-        if (used > cap1) {
-            used = cap1;
-            DSBM_CENSUS(CENSUS_RAIN_CAPPED, 0)
-        }
+        used = 0.0;
+        remaining_rain_m = rain_sub;
 #ifdef DSBM_CENSUS_BUILD
         DSBM_CENSUS(CENSUS_SUBSTEP, 0)
         if (rain_sub > 0.0) {
             DSBM_CENSUS(CENSUS_RAIN, 0)
         }
 #endif
+        for (d = 0; d < n_rain_receiving_discs; d++) {
+            cap1 = (params->theta_sat - theta[d]) * geom->dz_m[d];
+            if (cap1 < 0.0) cap1 = 0.0;
+
+            rain_into_disc_m = remaining_rain_m;
+            if (rain_into_disc_m > cap1) {
+                rain_into_disc_m = cap1;
+#ifdef DSBM_CENSUS_BUILD
+                if (d == 0) {
+                    DSBM_CENSUS(CENSUS_RAIN_CAPPED, 0)
+                }
+#endif
+            }
+#ifdef DSBM_CENSUS_BUILD
+            if (rain_into_disc_m > 0.0) {
+                DSBM_CENSUS(CENSUS_RAIN_INTO_DISC, d)
+            }
+#endif
+
+            theta[d] += rain_into_disc_m / geom->dz_m[d];
+            if (theta[d] > params->theta_sat) theta[d] = params->theta_sat;
+
+            used = used + rain_into_disc_m;
+            remaining_rain_m = remaining_rain_m - rain_into_disc_m;
+        }
 
         excess = rain_sub - used;
         if (excess < 0.0) excess = 0.0;
-
-        theta[0] += used / geom->dz_m[0];
-        if (theta[0] > params->theta_sat) theta[0] = params->theta_sat;
+#ifdef DSBM_CENSUS_BUILD
+        if (excess > 0.0) {
+            DSBM_CENSUS(CENSUS_RAIN_EXCESS, 0)
+        }
+#endif
 
         flux->rain_into_soil_m += used;
         flux->rain_excess_m    += excess;

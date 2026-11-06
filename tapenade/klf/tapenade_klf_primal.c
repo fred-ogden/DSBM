@@ -191,6 +191,7 @@ void dsbm_lateral_from_klf(double klf_m_per_h,
     } else {
         ctrl.lateral_scheme = LATERAL_SCHEME_FORWARD_EULER;
     }
+    ctrl.rain_input_scheme = RAIN_INPUT_SCHEME_CASCADE;  /* infiltration flux upper boundary, TRUE (FLO 11/06/2026) */
 
     /* ---- Noah-MP disc geometry (m) ---- */
     geom.dz_m[0] = 0.10;

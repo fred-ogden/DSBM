@@ -7,3 +7,4 @@ soil_field_capacity_Pcap_over_Patm_0_1=0.333[P P-1]
 soil_reservoir_rate_const_to_subsurface_lateral_flow=0.000005[m h-1]
 soil_to_gw_percolation_rate_limiter_0_to_1=0.81[]
 state_soil_reservoir_init_storage_m=0.7843498367003[m]
+control_soil_infiltration_flux_upper_boundary_true_false=TRUE // TRUE: rain fills disc 1, then 2, 3, 4; excess only when all are saturated. TRUE is required for equivalence to WRF-Hydro Noah-MP.

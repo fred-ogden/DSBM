@@ -27,6 +27,11 @@
 #     tools/check_regression.csh                (baseline commit da787c6)
 #     tools/check_regression.csh <commit>       (any earlier commit)
 #
+# FLO 11/06/2026: since the rain cascade (infiltration as a flux upper
+# boundary condition) the current run_dsbm*.csh output differs from any
+# earlier commit, so this check applies only to commits before it.  For
+# the cascade, use tools/check_infiltration_regression.csh.
+#
 # Exit status 0 only if every comparison passes.  ASCII only.
 
 set nonomatch

@@ -55,6 +55,29 @@ theta, in each disc. Soil moisture is redistributed between adjacent
 discs according to Darcy-Buckingham fluxes. Positive vertical flux is
 downward.
 
+### Rain input: infiltration as a flux upper boundary condition
+
+FLO 11/06/2026.  The config keyword
+`control_soil_infiltration_flux_upper_boundary_true_false` (required in
+every config file) selects how rain enters the soil in each substep:
+
+-   `TRUE` (the default with no config file, and the value in every
+    supplied config except the `_infiltration_excess` one): infiltration
+    is a flux upper boundary condition.  The substep's rain fills disc 1
+    to saturation, then disc 2, 3 and 4; only rain that finds every disc
+    saturated is surface excess.  This is how WRF-Hydro Noah-MP treats
+    rain (its SSTEP returns excess only when the whole soil is
+    saturated), so `TRUE` is required for equivalence to Noah-MP and for
+    dCFE, and it matches CFE3.1.  The Noah-MP comparison solver refuses
+    `FALSE`.
+-   `FALSE`: DSBM's original form, kept for testing.  Rain enters disc 1
+    only; whatever disc 1 cannot hold is infiltration excess.  Its
+    output is bitwise identical to DSBM before the keyword was added.
+
+The SoilControl field is `rain_input_scheme`
+(`RAIN_INPUT_SCHEME_CASCADE` = 0, `RAIN_INPUT_SCHEME_TOP_DISC_ONLY` = 1;
+`include/soil_data_types.h`), the same names as in CFE3.1.
+
 ## Soil hydraulic relationships
 
 DSBM uses Clapp-Hornberger relationships to calculate matric potential
@@ -266,7 +289,8 @@ forward-Euler lateral sink, which is now Noah-MP fidelity 2 with
 |-- Makefile
 |-- README.md, README.1st, README_FC_THRESHOLD.txt, LICENSE
 |-- configs/
-|   `-- soil_params.dat                  soil parameters (key=value)
+|   |-- soil_params.dat                  soil parameters (key=value)
+|   `-- soil_params_infiltration_excess.dat  the same, rain into disc 1 only (FALSE)
 |-- forcing/
 |   `-- rain_pet_example.csv             hourly rainfall and PET, 78168 hours
 |-- include/
@@ -289,11 +313,14 @@ forward-Euler lateral sink, which is now Noah-MP fidelity 2 with
 |-- run_dsbm.csh                         DSBM, lookup table
 |-- run_dsbm_analytic.csh                DSBM, analytic Clapp-Hornberger
 |-- run_dsbm_fc_limit.csh                DSBM, field-capacity percolation threshold
+|-- run_dsbm_infiltration_excess.csh     DSBM, lookup table, rain into disc 1 only (testing)
+|-- run_dsbm_analytic_infiltration_excess.csh  DSBM, analytic, rain into disc 1 only (testing)
 |-- run_noahmp.csh                       Noah-MP fidelity 2 (DSBM lateral flow), for 1:1 comparison
 |-- run_noahmp_fc_limit.csh              Noah-MP fidelity 2, field-capacity percolation threshold
 |-- run_noahmp_fidelity1.csh             Noah-MP fidelity 1, Noah-MP as written
 |-- tools/
-|   |-- check_regression.csh             byte-for-byte check against an earlier commit
+|   |-- check_infiltration_regression.csh  rain input: FALSE bitwise against an earlier commit, TRUE totals
+|   |-- check_regression.csh             byte-for-byte check against an earlier commit (before the rain cascade)
 |   |-- compare_run_times.csh            run times of HEAD against an earlier commit (full output and kernel-only)
 |   |-- run_branch_census.csh            branch-activity census
 |   |-- run_equal_head_census.csh        equal-head limit census over soil parameter sets
@@ -361,7 +388,7 @@ make census
 
 ## Running the comparison
 
-Six convenience scripts are supplied:
+Eight convenience scripts are supplied:
 
 ``` text
 run_dsbm.csh
@@ -370,6 +397,8 @@ run_noahmp.csh
 run_dsbm_fc_limit.csh
 run_noahmp_fc_limit.csh
 run_noahmp_fidelity1.csh
+run_dsbm_infiltration_excess.csh
+run_dsbm_analytic_infiltration_excess.csh
 ```
 
 The first group runs the conductivity-based lower-boundary comparison
@@ -394,6 +423,14 @@ threshold to both formulations (Noah-MP at fidelity 2):
 `run_noahmp_fidelity1.csh` runs Noah-MP as written, with no lateral
 flow.  It is not a 1:1 comparison with DSBM.
 
+The two `_infiltration_excess` scripts run DSBM with
+`control_soil_infiltration_flux_upper_boundary_true_false=FALSE`
+(`configs/soil_params_infiltration_excess.dat`): rain enters disc 1
+only, as DSBM did originally.  They are for testing; all other scripts
+use `TRUE`.  `tools/check_infiltration_regression.csh` checks them
+byte for byte against an earlier commit and tabulates the totals of
+every run.
+
 The scripts use the same uniform soil hydraulic properties, vertical
 discretization, forcing, and initial total soil-moisture storage so that
 state and flux time series can be compared directly. Output goes to
@@ -404,18 +441,22 @@ from before those defaults changed, see the next section.
 
 ## Reproducing the original DSBM output
 
-Three defaults have changed since commit `1a8d1e2`: the DSBM substep
+Four defaults have changed since commit `1a8d1e2`: the DSBM substep
 count (fixed at 4, previously adaptive), the DSBM lateral removal (exact
-exponential, previously forward Euler), and the wilting point (computed
-at 15 atmospheres, previously fixed at 0.10, for both DSBM and Noah-MP).
-The original choices are still available.  Add this line to the config
-file:
+exponential, previously forward Euler), the wilting point (computed
+at 15 atmospheres, previously fixed at 0.10, for both DSBM and Noah-MP),
+and the DSBM rain input (rain fills the discs in turn, previously disc 1
+only).  The original choices are still available.  Add this line to the
+config file:
 
 ``` text
 soil_wilting_point_m3_per_m3=0.10[V V-1]
 ```
 
-and, for DSBM runs, these options:
+and, for DSBM runs, set
+`control_soil_infiltration_flux_upper_boundary_true_false=FALSE`
+in it (Noah-MP runs require `TRUE`, which does not change Noah-MP
+output), and, for DSBM runs, add these options:
 
 ``` text
 --nsub 0 --lateral-forward-euler
@@ -531,7 +572,11 @@ soil_field_capacity_Pcap_over_Patm_0_1=0.333[P P-1]
 soil_reservoir_rate_const_to_subsurface_lateral_flow=0.000005[m h-1]
 soil_to_gw_percolation_rate_limiter_0_to_1=0.81[]
 state_soil_reservoir_init_storage_m=0.7843498367003[m]
+control_soil_infiltration_flux_upper_boundary_true_false=TRUE // TRUE: rain fills disc 1, then 2, 3, 4; ...
 ```
+
+`control_soil_infiltration_flux_upper_boundary_true_false` is required;
+see "Rain input" above.
 
 Some quantities are derived rather than read:
 

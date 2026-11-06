@@ -376,6 +376,8 @@ typedef struct {
     double wilting_point_moisture_content;      // theta_wp set directly (m3/m3)
     int have_initial_storage_m;
     double initial_storage_m;
+    int have_infiltration_flux_upper_boundary;  // keyword given (required in a config file)
+    int infiltration_flux_upper_boundary;       // 1 TRUE: cascade; 0 FALSE: disc 0 only
 } SoilConfigOptions;
 
 static int load_config_file(const char *path, SoilParameters *params, SoilConfigOptions *config)
@@ -413,6 +415,21 @@ static int load_config_file(const char *path, SoilParameters *params, SoilConfig
                 fclose(fp);
                 return -1;
             }
+            continue;
+        }
+
+        // FLO 11/06/2026: infiltration as a flux upper boundary condition
+        // (see RAIN_INPUT_SCHEME_* in soil_data_types.h).  Required.
+        if (!strcmp(key, "control_soil_infiltration_flux_upper_boundary_true_false")) {
+            if (!strcmp(value, "TRUE")) config->infiltration_flux_upper_boundary = 1;
+            else if (!strcmp(value, "FALSE")) config->infiltration_flux_upper_boundary = 0;
+            else {
+                fprintf(stderr, "ERROR: %s must be TRUE or FALSE at line %ld.\n",
+                        key, line_number);
+                fclose(fp);
+                return -1;
+            }
+            config->have_infiltration_flux_upper_boundary = 1;
             continue;
         }
 
@@ -458,6 +475,16 @@ static int load_config_file(const char *path, SoilParameters *params, SoilConfig
         }
     }
     fclose(fp);
+
+    if (!config->have_infiltration_flux_upper_boundary) {
+        fprintf(stderr,
+                "ERROR: %s does not set control_soil_infiltration_flux_upper_boundary_true_false.\n"
+                "       TRUE: rain fills disc 1, then 2, 3, ...; excess only when every disc is\n"
+                "             saturated (required for equivalence to WRF-Hydro Noah-MP).\n"
+                "       FALSE: rain enters disc 1 only; the rest is infiltration excess (testing).\n",
+                path);
+        return -1;
+    }
 
     if (config->calculate_phi_sat_from_ksat)
         params->phi_sat_cm = 10.415 * pow(params->K_sat_cm_per_h, -0.3266);
@@ -563,6 +590,7 @@ static void default_control(SoilControl *ctrl)
     ctrl->substep_lateral_severity = 0;// adaptive substeps ignore lateral rate unless requested
     ctrl->lateral_scheme = LATERAL_SCHEME_EXPONENTIAL; // unless --lateral-forward-euler
     ctrl->noahmp_fidelity = NOAHMP_FIDELITY_AS_WRITTEN; // unless --noahmp-fidelity 2
+    ctrl->rain_input_scheme = RAIN_INPUT_SCHEME_CASCADE; // unless the config file sets FALSE
     ctrl->dt_hours = 1.0;
 }
 
@@ -707,7 +735,21 @@ int main(int argc, char **argv)
     if (opt.have_config) {
         if (load_config_file(opt.config_path, &params, &config))
             die("failed to read soil config file");
+        if (config.infiltration_flux_upper_boundary) {
+            ctrl.rain_input_scheme = RAIN_INPUT_SCHEME_CASCADE;
+        } else {
+            ctrl.rain_input_scheme = RAIN_INPUT_SCHEME_TOP_DISC_ONLY;
+        }
+        if (!strcmp(opt.solver, "noahmp") &&
+            ctrl.rain_input_scheme == RAIN_INPUT_SCHEME_TOP_DISC_ONLY) {
+            fprintf(stderr,
+                    "ERROR: control_soil_infiltration_flux_upper_boundary_true_false=FALSE is not\n"
+                    "       part of Noah-MP; --solver noahmp requires TRUE.\n");
+            return EXIT_FAILURE;
+        }
         if (opt.verbosity > 0) {
+            fprintf(stdout, "infiltration flux upper boundary = %s\n",
+                    config.infiltration_flux_upper_boundary ? "TRUE (cascade)" : "FALSE (disc 1 only, infiltration excess)");
             if (config.have_wilting_point_moisture_content) {
                 fprintf(stdout, "wilting point moisture content (from config) = %.5f\n", params.theta_wp);
             } else {
@@ -1014,6 +1056,11 @@ int main(int argc, char **argv)
             } else {
                 fprintf(fp_sum, "Noah-MP fidelity: 1 (Noah-MP as written)\n");
             }
+        }
+        if (ctrl.rain_input_scheme == RAIN_INPUT_SCHEME_CASCADE) {
+            fprintf(fp_sum, "Infiltration flux upper boundary: TRUE (rain fills disc 1, then 2, 3, ...)\n");
+        } else {
+            fprintf(fp_sum, "Infiltration flux upper boundary: FALSE (disc 1 only; infiltration excess)\n");
         }
         fprintf(fp_sum, "\n");
         fprintf(fp_sum, "**************** %s SOIL VOLUME BALANCE ****************\n\n", solver_name);

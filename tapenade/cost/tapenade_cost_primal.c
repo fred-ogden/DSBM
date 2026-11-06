@@ -158,6 +158,7 @@ void dsbm_cost_from_params(double klf_m_per_h,
     ctrl.n_sub_minimum = 0;
     ctrl.substep_lateral_severity = 0;
     ctrl.lateral_scheme = LATERAL_SCHEME_EXPONENTIAL;
+    ctrl.rain_input_scheme = RAIN_INPUT_SCHEME_CASCADE;  /* infiltration flux upper boundary, TRUE (FLO 11/06/2026) */
 
     geom.dz_m[0] = 0.10;
     geom.dz_m[1] = 0.30;
@@ -263,6 +264,7 @@ void dsbm_series_from_params(double klf_m_per_h,
     ctrl.n_sub_minimum = 0;
     ctrl.substep_lateral_severity = 0;
     ctrl.lateral_scheme = LATERAL_SCHEME_EXPONENTIAL;
+    ctrl.rain_input_scheme = RAIN_INPUT_SCHEME_CASCADE;  /* infiltration flux upper boundary, TRUE (FLO 11/06/2026) */
 
     geom.dz_m[0] = 0.10;
     geom.dz_m[1] = 0.30;

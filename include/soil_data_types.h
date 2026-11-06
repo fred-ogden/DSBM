@@ -56,6 +56,23 @@ extern "C" {
 #define NOAHMP_FIDELITY_AS_WRITTEN      1
 #define NOAHMP_FIDELITY_DSBM_TESTING    2
 
+// Rain input to the soil discs (SoilControl.rain_input_scheme), set by the
+// config keyword control_soil_infiltration_flux_upper_boundary_true_false.
+// FLO 11/06/2026, matching CFE3.1:
+//   CASCADE (TRUE, 0): infiltration is a flux upper boundary condition.  Each
+//      substep's rain fills disc 0 to saturation, then disc 1, 2, ...; only
+//      rain that finds every disc saturated is surface excess.  Required for
+//      equivalence to WRF-Hydro Noah-MP (whose SSTEP returns excess only when
+//      the whole soil is saturated) and for dCFE.  Zero, so a zero-initialized
+//      SoilControl gets it.
+//   TOP_DISC_ONLY (FALSE, 1): DSBM's original form, kept for testing: rain
+//      enters disc 0 only and whatever disc 0 cannot hold is infiltration
+//      excess.
+// The DSBM kernel uses this field; the Noah-MP comparison kernel ignores it
+// (its driver refuses FALSE).
+#define RAIN_INPUT_SCHEME_CASCADE        0
+#define RAIN_INPUT_SCHEME_TOP_DISC_ONLY  1
+
 // Downward Darcy-Buckingham transfers between discs are always limited so
 // that they cannot overshoot equal total hydraulic head (see
 // limit_downward_transfer_to_equal_head() in soil_helpers.c).  FLO 11/06/2026:
@@ -80,6 +97,8 @@ typedef struct {
     int    noahmp_fidelity;       // Noah-MP comparison kernel only:
                                   // NOAHMP_FIDELITY_AS_WRITTEN (1) or
                                   // NOAHMP_FIDELITY_DSBM_TESTING (2); see above
+    int    rain_input_scheme;     // RAIN_INPUT_SCHEME_CASCADE (0, default) or
+                                  // RAIN_INPUT_SCHEME_TOP_DISC_ONLY (1); see above
     double dt_hours;              // usually 1.0
 } SoilControl;
 
