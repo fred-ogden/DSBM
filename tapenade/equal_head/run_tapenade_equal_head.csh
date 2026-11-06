@@ -45,10 +45,9 @@ set results_dir    = output/tapenade_equal_head
 set exe            = bin/tapenade_equal_head_check
 set forcing        = forcing/rain_pet_example.csv
 set ndisc          = 4
-set theta_min      = 1.0e-03
 set head_spec      = "equal_head_check_primal(limited_transfer_m)/(transfer_requested_m theta_upper theta_lower theta_sat phi_sat_cm b_exp)"
 set sources        = "equal_head_check_primal.c soil_helpers.c"
-set cflags         = "-std=c11 -O2 -Wall -Wextra -DNDISC=$ndisc -DTHETA_MIN=$theta_min"
+set cflags         = "-std=c11 -O2 -Wall -Wextra -DNDISC=$ndisc"
 # parameter sets "k_lf perc_limiter Ksat b": the config values, then the
 # E10-bound corners in which tools/run_equal_head_census.csh found the
 # limiter on the Newton path (census sets 4, 5, 9, 13, 17)

@@ -62,7 +62,11 @@ set results_dir  = $repo_root/output/run_times
 set runs         = "dsbm dsbm_analytic kernel_lut kernel_analytic"
 # options shared by the kernel runs (paths relative to each worktree)
 set kernel_options = "--config configs/soil_params.dat --solver dsbm --forcing forcing/rain_pet_example.csv --verbosity 0 --write-volbal --timestamp datetime --dz 0.1,0.3,0.6,1.0 --zc 0.05,0.25,0.7,1.5"
-set lut_options    = "--use-lut --lut-n 400 --lut-Theta-min 1e-6"
+# lookup-table options: commits before FLO 11/06/2026 took a table size and
+# minimum (400 points from 1e-6 were used); later commits have a fixed
+# 2-point table and reject those options.  Chosen per worktree below.
+set lut_options_old = "--use-lut --lut-n 400 --lut-Theta-min 1e-6"
+set lut_options_new = "--use-lut"
 
 git rev-parse --verify --quiet "$baseline_commit^{commit}" >& /dev/null
 if ( $status != 0 ) then
@@ -112,6 +116,9 @@ foreach run ( $runs )
             if ( "$run" == "kernel_lut" ) then
                 set outdir = output/timing_$run
                 mkdir -p $worktree_dir/$outdir
+                set lut_options = "$lut_options_new"
+                grep -q "&o->lut_n" $worktree_dir/src/bmi_soil_driver.c
+                if ( $status == 0 ) set lut_options = "$lut_options_old"
                 ( cd $worktree_dir && bin/soil_driver $kernel_options $lut_options --outdir $outdir ) >& /dev/null
                 set run_status = $status
             else if ( "$run" == "kernel_analytic" ) then

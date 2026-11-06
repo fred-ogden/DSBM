@@ -72,7 +72,8 @@ static const CensusEventInfo census_event_info[CENSUS_N_EVENTS] = {
     {"eq_head_zero",      "equal-head limit set downward transfer to 0",    PER_INTERFACE_SUB, 1},
     {"eq_head_late_bisect", "bisection step in last 5 limiter iterations (count, not %)", PER_SUBSTEP, 0},
     {"eq_head_call",      "limiter called, positive request (count, not %)", PER_SUBSTEP,      0},
-    {"eq_head_prescreen", "limiter pre-screen: no psi needed (count, not %)", PER_SUBSTEP,      0}
+    {"eq_head_prescreen", "limiter pre-screen: no psi needed (count, not %)", PER_SUBSTEP,      0},
+    {"at_dry_limit",      "theta at the dry-end floor after a substep",     PER_DISC_SUB,      1}
 };
 
 static long long census_count[CENSUS_N_EVENTS][CENSUS_MAX_INDEX];
@@ -81,6 +82,10 @@ static long long census_last_hour[CENSUS_N_EVENTS][CENSUS_MAX_INDEX];
 static long long census_current_hour = 0;
 static long long census_total_substeps = 0;
 static int census_registered = 0;
+/* smallest scaled soil moisture theta/theta_sat per disc, and the hour it occurred */
+static double census_min_scaled_soil_moisture[CENSUS_MAX_INDEX];
+static long long census_min_scaled_soil_moisture_hour[CENSUS_MAX_INDEX];
+static int census_min_scaled_soil_moisture_seen = 0;
 
 static void dsbm_census_report(void);
 
@@ -180,5 +185,36 @@ static void dsbm_census_report(void)
                    census_hours[e][0]);
         }
     }
+
+    printf("\nSmallest scaled soil moisture THETA = theta / theta_sat at the end of\n");
+    printf("any substep (dry-end limit THETA = %.3f, CH_SCALED_SOIL_MOISTURE_MIN):\n",
+           CH_SCALED_SOIL_MOISTURE_MIN);
+    if (census_min_scaled_soil_moisture_seen) {
+        for (int k = 0; k < NDISC; k++) {
+            const char *at_limit_note = "";
+            if (census_min_scaled_soil_moisture[k] <= CH_SCALED_SOIL_MOISTURE_MIN * (1.0 + 1.0e-12)) {
+                at_limit_note = "   (AT THE LIMIT)";
+            }
+            printf("   disc %d : THETA_min = %.6f  in hour %lld%s\n", k + 1,
+                   census_min_scaled_soil_moisture[k],
+                   census_min_scaled_soil_moisture_hour[k], at_limit_note);
+        }
+    }
     printf("=============================================================\n");
+}
+
+void dsbm_census_scaled_soil_moisture(int disc_index, double scaled_soil_moisture)
+{
+    if (disc_index < 0 || disc_index >= CENSUS_MAX_INDEX) return;
+    if (!census_min_scaled_soil_moisture_seen) {
+        for (int k = 0; k < CENSUS_MAX_INDEX; k++) {
+            census_min_scaled_soil_moisture[k] = 1.0e300;
+            census_min_scaled_soil_moisture_hour[k] = -1;
+        }
+        census_min_scaled_soil_moisture_seen = 1;
+    }
+    if (scaled_soil_moisture < census_min_scaled_soil_moisture[disc_index]) {
+        census_min_scaled_soil_moisture[disc_index] = scaled_soil_moisture;
+        census_min_scaled_soil_moisture_hour[disc_index] = census_current_hour;
+    }
 }

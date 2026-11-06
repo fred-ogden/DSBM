@@ -76,7 +76,11 @@
                                             (upper disc at least as wet as lower after transfer),
                                             so no psi_from_theta() calls were needed */
 
-#define CENSUS_N_EVENTS             31
+/* ---- dry-end soil moisture limit, per disc, end of substep (FLO 11/06/2026) ---- */
+#define CENSUS_AT_DRY_LIMIT         31   /* theta at the kernel floor (CH_SCALED_SOIL_MOISTURE_MIN
+                                            theta_sat, or theta_r if > 0) after the safety clamp */
+
+#define CENSUS_N_EVENTS             32
 
 /*
  * The hook supplies its own semicolon and is written in the kernel
@@ -92,6 +96,19 @@ void dsbm_census_count(int event_id, int index);
 #define DSBM_CENSUS(event_id, index) dsbm_census_count((event_id), (index));
 #else
 #define DSBM_CENSUS(event_id, index)
+#endif
+
+/*
+ * Smallest scaled soil moisture THETA = theta / theta_sat reached in each
+ * disc at the end of any substep (FLO 11/06/2026).  Same rules as
+ * DSBM_CENSUS(): its own semicolon, nothing in the normal build.
+ */
+#ifdef DSBM_CENSUS_BUILD
+void dsbm_census_scaled_soil_moisture(int disc_index, double scaled_soil_moisture);
+#define DSBM_CENSUS_SCALED_SOIL_MOISTURE(disc_index, scaled_soil_moisture) \
+    dsbm_census_scaled_soil_moisture((disc_index), (scaled_soil_moisture));
+#else
+#define DSBM_CENSUS_SCALED_SOIL_MOISTURE(disc_index, scaled_soil_moisture)
 #endif
 
 #endif /* DSBM_CENSUS_HOOKS_H */

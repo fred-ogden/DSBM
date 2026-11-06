@@ -24,7 +24,7 @@
 #define SOIL_CLI_H
 
 #include <limits.h>   /* for PATH_MAX fallback */
-#include "soil_config.h"  /* brings NDISC, THETA_MIN, etc. */
+#include "soil_config.h"  /* brings NDISC, CH_SCALED_SOIL_MOISTURE_MIN, etc. */
 
 /* -------- time-column mode for output files ------------------------ */
 typedef enum {
@@ -68,8 +68,6 @@ typedef struct {
 
     /* lookup table */
     int  use_lut;
-    int  lut_n;
-    double lut_Theta_min;
 
     /* geometry overrides */
     int  have_dz;

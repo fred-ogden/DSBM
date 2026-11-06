@@ -41,8 +41,8 @@ double K_from_theta(double theta, double theta_sat,
                     double K_sat_cm_per_h, double b_exp);
 
 /* ---------- LUT build / free ---------- */
-int  soil_build_ch_lut(int n_points, double Theta_min,
-                       double theta_r, double theta_sat, double b_exp,
+/* 2 points from Theta = CH_SCALED_SOIL_MOISTURE_MIN to 1 (FLO 11/06/2026) */
+int  soil_build_ch_lut(double theta_r, double theta_sat, double b_exp,
                        double phi_sat_cm, double K_sat_cm_per_h,
                        SoilLookupTables *lut_out);
 

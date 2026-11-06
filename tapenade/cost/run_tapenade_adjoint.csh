@@ -44,7 +44,6 @@ set experiment_dir = tapenade/cost
 set experiments = abcd
 if ( $#argv > 0 ) set experiments = "$1"
 set ndisc = 4
-set theta_min = 1.0e-03
 set work_dir = tapenade_input/adjoint
 set gen_d = $work_dir/generated_d
 set gen_b = $work_dir/generated_b
@@ -54,7 +53,7 @@ set head_function = dsbm_cost_from_params
 set head_spec = "dsbm_cost_from_params(cost_function_value)/(klf_m_per_h perc_limiter_0_to_1)"
 set sources = "tapenade_cost_primal.c dsbm_soilmoisture_stateless.c soil_helpers.c"
 
-set cflags = "-std=c11 -O2 -Wall -Wextra -DNDISC=$ndisc -DTHETA_MIN=$theta_min"
+set cflags = "-std=c11 -O2 -Wall -Wextra -DNDISC=$ndisc"
 
 set tapenade_home = /user2/ogden/opt/tapenade/tapenade_3.16
 set kit_dir = $tapenade_home/ADFirstAidKit

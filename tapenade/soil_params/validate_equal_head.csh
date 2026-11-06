@@ -12,7 +12,7 @@ set experiment_dir = tapenade/soil_params
 set work_dir = tapenade_input/equal_head
 set results_dir = output/equal_head_validation
 set kit_dir = /user2/ogden/opt/tapenade/tapenade_3.16/ADFirstAidKit
-set flags = '-std=c99 -O2 -Wall -Wextra -DNDISC=4 -DTHETA_MIN=1.0e-3'
+set flags = '-std=c99 -O2 -Wall -Wextra -DNDISC=4'
 if ( ! -f $kit_dir/adStack.c ) then
     echo "FAIL: Tapenade ADFirstAidKit not found at $kit_dir"
     exit 1

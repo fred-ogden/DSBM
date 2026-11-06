@@ -134,6 +134,13 @@ double soil_cost_theta_wp(double theta_sat, double phi_sat_cm, double b_exp)
     } else {
         theta_wp = theta_sat * pow(phi_sat_cm / wilting_point_head_cm, 1.0 / b_exp);
     }
+    // FLO 11/06/2026: clamped at no less than the dry-end limit, as in
+    // src/bmi_soil_driver.c (see soil_config.h).  Binds only for coarse,
+    // high-conductivity soils with small b; there the derivatives of
+    // theta_wp with respect to Ksat and b are zero.
+    if (theta_wp < CH_SCALED_SOIL_MOISTURE_MIN * theta_sat) {
+        theta_wp = CH_SCALED_SOIL_MOISTURE_MIN * theta_sat;
+    }
     return theta_wp;
 }
 

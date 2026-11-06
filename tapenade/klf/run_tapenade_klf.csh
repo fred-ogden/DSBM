@@ -40,7 +40,6 @@ set experiment_dir = tapenade/klf
 set experiments = 1234567
 if ( $#argv > 0 ) set experiments = "$1"
 set ndisc = 4
-set theta_min = 1.0e-03
 set work_dir = tapenade_input/klf
 set gen_dir = $work_dir/generated
 set results_dir = output/tapenade_klf
@@ -49,7 +48,7 @@ set head_function = dsbm_lateral_from_klf
 set dependents = "lateral_total_by_disc_m theta_out percolation_total_m aet_total_m precipitation_excess_total_m"
 set independents = "klf_m_per_h"
 
-set cflags = "-std=c11 -O2 -Wall -Wextra -DNDISC=$ndisc -DTHETA_MIN=$theta_min"
+set cflags = "-std=c11 -O2 -Wall -Wextra -DNDISC=$ndisc"
 
 # Tapenade support headers, if present (harmless if not needed)
 set tapenade_home = /user2/ogden/opt/tapenade/tapenade_3.16

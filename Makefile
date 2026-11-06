@@ -9,7 +9,6 @@ RM      ?= rm -f
 # ---- Configuration ----
 CSTD        ?= c11
 NDISC       ?= 4
-THETA_MIN   ?= 1.0e-03
 MODE        ?= release
 
 EXTRA_CFLAGS  ?=
@@ -42,7 +41,7 @@ DRV_OBJ  := $(DRV_SRC:$(SRCDIR)/%.c=$(OBJDIR)/%.o)
 DEPS     := $(LIB_OBJ:.o=.d) $(DRV_OBJ:.o=.d)
 
 WARNFLAGS := -Wall -Wextra -Wshadow -Wpointer-arith -Wcast-qual -Wstrict-prototypes
-CPPFLAGS  := -I$(INCDIR) -DNDISC=$(NDISC) -DTHETA_MIN=$(THETA_MIN)
+CPPFLAGS  := -I$(INCDIR) -DNDISC=$(NDISC)
 
 CFLAGS_common := -std=$(CSTD) $(WARNFLAGS) -MMD -MP $(CPPFLAGS) $(EXTRA_CFLAGS)
 
@@ -114,14 +113,13 @@ print:
 	@echo "MODE=$(MODE)"
 	@echo "CFLAGS=$(CFLAGS)"
 	@echo "NDISC=$(NDISC)"
-	@echo "THETA_MIN=$(THETA_MIN)"
 	@echo "LIBSOIL=$(LIBSOIL)"
 	@echo "DRIVER=$(DRIVER)"
 
 # ---- Run helper ----
 # Usage examples:
 #   make run FORCE=example_hourly_rainfall_PET.txt OUT=out
-#   make run FORCE=forcing.txt OUT=run TIMECOL=calendar VERB=2
+#   make run FORCE=forcing.txt OUT=run TIMECOL=datetime VERB=2
 #
 # You can override:
 #   S0 (target storage, m), DZ, ZC, TIMECOL, VERB, TSTART
@@ -132,7 +130,7 @@ S0       ?= 0.34
 # geometry (comma-separated, as required by the driver parser)
 DZ       ?= 0.1,0.3,0.6,1.0
 ZC       ?= 0.05,0.25,0.7,1.5
-TIMECOL  ?= index
+TIMECOL  ?= timestep
 VERB     ?= 1
 TSTART   ?= 0
 
@@ -144,9 +142,9 @@ run: $(DRIVER)
 	  --forcing $(FORCE) \
 	  --outdir $(OUT) \
 	  --verbosity $(VERB) \
-	  --write-theta --write-fluxes --write-mb \
-	  --timecol $(TIMECOL) --tindex-start $(TSTART) \
-	  --use-lut --lut-n 400 --lut-Theta-min 1e-6 \
+	  --write-theta --write-fluxes --write-volbal \
+	  --timestamp $(TIMECOL) --timestep-start $(TSTART) \
+	  --use-lut \
 	  --dz $(DZ) --zc $(ZC) \
 	  --init-target-storage $(S0)
 

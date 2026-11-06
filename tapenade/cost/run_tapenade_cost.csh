@@ -41,7 +41,6 @@ set experiment_dir = tapenade/cost
 set experiments = abc
 if ( $#argv > 0 ) set experiments = "$1"
 set ndisc = 4
-set theta_min = 1.0e-03
 set work_dir = tapenade_input/cost
 set gen_dir = $work_dir/generated
 set results_dir = output/tapenade_cost
@@ -50,7 +49,7 @@ set head_function = dsbm_cost_from_params
 set dependents = "cost_function_value"
 set independents = "klf_m_per_h perc_limiter_0_to_1"
 
-set cflags = "-std=c11 -O2 -Wall -Wextra -DNDISC=$ndisc -DTHETA_MIN=$theta_min"
+set cflags = "-std=c11 -O2 -Wall -Wextra -DNDISC=$ndisc"
 
 # Tapenade support headers, if present (harmless if not needed)
 set tapenade_home = /user2/ogden/opt/tapenade/tapenade_3.16

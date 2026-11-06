@@ -108,7 +108,27 @@ gradient changes only in response to evapotranspiration (ET) demand,
 which is never large.
 
 An optional lookup table can be used for the Clapp-Hornberger hydraulic
-functions.
+functions.  The relations are log-linear in the scaled soil moisture
+THETA = theta / theta_sat, so the table has 2 points, from THETA = 0.03
+to THETA = 1, and agrees with the analytic functions to roundoff.
+
+### Dry-end soil moisture limit
+
+The Clapp-Hornberger relations assume theta_r = 0, so psi and K are
+singular at theta = 0 and need a lower limit.  One limit is used
+everywhere soil moisture is bounded below (FLO 11/06/2026): THETA =
+theta / theta_sat >= 0.03, `CH_SCALED_SOIL_MOISTURE_MIN` in
+`include/soil_config.h`.  It is the clamp in `psi_from_theta()`,
+`K_from_theta()` and `theta_from_psi()`, the minimum of the lookup
+table, and the kernel's numerical floor in the donor limits, the
+bottom-disc drainage and the post-transfer and end-of-substep clamps.
+If theta_r > 0 (a retention relation that is not Clapp-Hornberger), the
+floor is theta_r instead.  The calculated wilting point is clamped at no
+less than the floor, so that AET, which stops at the wilting point,
+cannot take a disc below it.  The limit is not expected to be reached;
+the census reports the smallest THETA reached in each disc.  It replaces
+an absolute limit of 1.0e-3 m3/m3 that differed from the lookup-table
+minimum.
 
 ## Noah-MP comparison solver
 
@@ -322,11 +342,10 @@ To remove generated build products:
 make veryclean
 ```
 
-The number of soil discs and minimum soil moisture can be overridden at
-build time if required:
+The number of soil discs can be overridden at build time if required:
 
 ``` bash
-make NDISC=4 THETA_MIN=1.0e-03
+make NDISC=4
 ```
 
 Changing `NDISC` changes the numerical discretization of the soil
@@ -446,10 +465,11 @@ For the corresponding Noah-MP calculation, use `--solver noahmp
 --noahmp-fidelity 2` (fidelity 2 adds the DSBM lateral flow; see
 [Noah-MP fidelity](#noah-mp-fidelity)).
 
-DSBM additionally supports a Clapp-Hornberger lookup table:
+DSBM additionally supports the 2-point Clapp-Hornberger lookup table
+(see [Dry-end soil moisture limit](#dry-end-soil-moisture-limit)):
 
 ``` text
---use-lut --lut-n 400 --lut-Theta-min 1e-6
+--use-lut
 ```
 
 The initial state is a hydrostatic profile. By default its total storage
@@ -532,7 +552,10 @@ Some quantities are derived rather than read:
     start of a run.  Two optional keys change it:
     `soil_wilting_point_Pcap_over_Patm=<ratio>[P P-1]` changes the
     pressure ratio, and `soil_wilting_point_m3_per_m3=<value>[V V-1]`
-    sets theta_wp directly, overriding the calculation.
+    sets theta_wp directly, overriding the calculation.  A calculated
+    wilting point below the dry-end floor (0.03 theta_sat) is clamped
+    to it, with a note on the screen; a wilting point set directly
+    below the floor is an error.
 -   The residual soil moisture `theta_r` is fixed at 0 in the driver.
 
 These are properties or parameters of the **uniform soil column**. The

@@ -110,6 +110,8 @@ foreach parameter_set ( $parameter_sets:q )
     grep -A 1 "^eq_head_late_bisect" $report >> $summary
     grep -A 1 "^eq_head_call" $report >> $summary
     grep -A 1 "^eq_head_prescreen" $report >> $summary
+    grep -A 4 "^at_dry_limit" $report >> $summary
+    grep -A 5 "^Smallest scaled soil moisture" $report | tail -4 >> $summary
 end
 
 cat $summary

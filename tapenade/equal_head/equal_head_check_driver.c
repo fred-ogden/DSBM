@@ -48,7 +48,8 @@
  *      every input; check that the AD derivative is zero.
  *
  * Activations at which theta_upper_after or theta_lower_after sits at
- * a clamp of psi_from_theta() (THETA_MIN or theta_sat) are counted
+ * a clamp of psi_from_theta() (the dry-end limit
+ * CH_SCALED_SOIL_MOISTURE_MIN theta_sat, or theta_sat) are counted
  * separately: the analytic formula above assumes neither clamp is active.
  *
  * Usage:
@@ -74,10 +75,6 @@
 #include "soil_helpers.h"
 #include "dsbm_soilmoisture_stateless.h"
 #include "equal_head_check.h"
-
-#ifndef THETA_MIN
-#define THETA_MIN 1.0e-03
-#endif
 
 /* ---- model setup, as configs/soil_params.dat and E10 ---- */
 #define SOIL_THETA_SAT                     0.439
@@ -261,6 +258,10 @@ static int run_record(long n_hours, double klf_m_per_h, double perc_limiter,
     params.theta_aet_eq_pet = params.theta_fc;
     params.theta_wp = theta_at_pressure_ratio(WILTING_POINT_PRESSURE_RATIO,
                                            params.theta_sat, params.phi_sat_cm, params.b_exp);
+    // derived wilting point clamped at the dry-end limit, as in the driver
+    if (params.theta_wp < CH_SCALED_SOIL_MOISTURE_MIN * params.theta_sat) {
+        params.theta_wp = CH_SCALED_SOIL_MOISTURE_MIN * params.theta_sat;
+    }
 
     printf("soil: theta_sat %.4f  phi_sat %.4f cm  theta_fc %.5f  theta_wp %.5f\n",
            params.theta_sat, params.phi_sat_cm, params.theta_fc, params.theta_wp);
@@ -372,8 +373,8 @@ static int analytic_derivatives(const double limiter_inputs[N_LIMITER_INPUTS],
     *head_residual = log(psi_upper_m) - log(lower_head_m);
 
     for (k = 0; k < N_LIMITER_ACTIVE; k++) derivative_analytic[k] = 0.0;
-    if (!(theta_upper_after > THETA_MIN && theta_upper_after < theta_sat &&
-          theta_lower_after > THETA_MIN && theta_lower_after < theta_sat)) {
+    if (!(theta_upper_after > CH_SCALED_SOIL_MOISTURE_MIN * theta_sat && theta_upper_after < theta_sat &&
+          theta_lower_after > CH_SCALED_SOIL_MOISTURE_MIN * theta_sat && theta_lower_after < theta_sat)) {
         return 1;
     }
 

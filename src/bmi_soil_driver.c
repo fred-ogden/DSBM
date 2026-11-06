@@ -42,7 +42,7 @@
  *     --forcing forcing.txt \
  *     --outdir out \
  *     --verbosity 1 \
- *     --use-lut --lut-n 400 --lut-Theta-min 1e-6 \
+ *     --use-lut \
  *     --init-wt-depth 1.0 \
  *     --write-theta --write-fluxes --write-volbal
  */
@@ -144,9 +144,10 @@ static void usage(const char *prog)
         "  --init-target-storage <m>      Hydrostatic profile matching target storage.\n"
         "\n"
         "Lookup table (optional):\n"
-        "  --use-lut                      Use CH LUT (faster than analytic).\n"
-        "  --lut-n <int>                  Number of LUT points (default 400).\n"
-        "  --lut-Theta-min <val>          Minimum Theta for LUT grid (default 1e-6).\n"
+        "  --use-lut                      Use the Clapp-Hornberger lookup table instead of\n"
+        "                                 the analytic functions.  The relations are\n"
+        "                                 log-linear, so the table has 2 points, from the\n"
+        "                                 dry-end limit THETA = 0.03 to THETA = 1.\n"
         "\n"
         "Geometry (optional if compiled in):\n"
         "  --dz v1,v2,...,vN              Disc thicknesses (m) for NDISC discs.\n"
@@ -206,8 +207,6 @@ static void default_opts(DriverOpts *o)
 {
     memset(o, 0, sizeof(*o));
     o->verbosity = 1;
-    o->lut_n = 400;
-    o->lut_Theta_min = 1e-6;
     o->timecol = TC_DATETIME;   // NEW
     strcpy(o->solver, "dsbm");
     o->noahmp_fidelity = NOAHMP_FIDELITY_AS_WRITTEN;
@@ -300,10 +299,10 @@ int parse_args(int argc, char **argv, DriverOpts *o)
             o->use_init_target_storage = 1;
         } else if (!strcmp(a, "--use-lut")) {
             o->use_lut = 1;
-        } else if (!strcmp(a, "--lut-n") && i+1 < argc) {
-            if (parse_int(argv[++i], &o->lut_n)) return -1;
-        } else if (!strcmp(a, "--lut-Theta-min") && i+1 < argc) {
-            if (parse_double(argv[++i], &o->lut_Theta_min)) return -1;
+        } else if (!strcmp(a, "--lut-n") || !strcmp(a, "--lut-Theta-min")) {
+            fprintf(stderr, "ERROR: %s was removed (FLO 11/06/2026).  The lookup table always\n"
+                            "       has 2 points, from the dry-end limit THETA = 0.03 to 1.\n", a);
+            return -1;
         } else if (!strcmp(a, "--dz") && i+1 < argc) {
             if (parse_csv_list(argv[++i], o->dz_override, NDISC)) return -1;
             o->have_dz = 1;
@@ -487,9 +486,31 @@ static int load_config_file(const char *path, SoilParameters *params, SoilConfig
      * was calculated).  If the wilting-point head is at or below phi_sat
      * the soil is saturated there, so theta_wp = theta_sat (the same rule
      * as for theta_fc).
+     *
+     * FLO 11/06/2026: the calculated wilting point is clamped at no less
+     * than the kernel's soil moisture floor (CH_SCALED_SOIL_MOISTURE_MIN
+     * theta_sat, or theta_r if theta_r > 0; see soil_config.h).  AET stops
+     * at theta_wp, so this keeps AET from taking a disc below the floor,
+     * where the end-of-substep safety clamp would add soil moisture
+     * without a flux and break the volume balance.  It binds only for
+     * coarse, high-conductivity soils with a small b (for example Ksat
+     * 100 cm/h with b = 2).  A wilting point set directly below the floor
+     * is an error.
      */
+    double soil_moisture_floor;   // kernel floor on soil moisture (m3/m3)
+    if (params->theta_r > 0.0) {
+        soil_moisture_floor = params->theta_r;
+    } else {
+        soil_moisture_floor = CH_SCALED_SOIL_MOISTURE_MIN * params->theta_sat;
+    }
     if (config->have_wilting_point_moisture_content) {
         params->theta_wp = config->wilting_point_moisture_content;
+        if (params->theta_wp < soil_moisture_floor) {
+            fprintf(stderr, "ERROR: soil_wilting_point_m3_per_m3 = %.6g is below the soil moisture\n"
+                            "       floor %.6g (%.2f theta_sat, see soil_config.h).\n",
+                    params->theta_wp, soil_moisture_floor, CH_SCALED_SOIL_MOISTURE_MIN);
+            return 1;
+        }
     } else {
         const double atmospheric_pressure_head_cm = 1033.2274528;
         double wilting_point_pressure_ratio = WILTING_POINT_PCAP_OVER_PATM;
@@ -504,6 +525,12 @@ static int load_config_file(const char *path, SoilParameters *params, SoilConfig
         } else {
             params->theta_wp = params->theta_sat *
                             pow(wilting_point_head_cm / params->phi_sat_cm, -1.0 / params->b_exp);
+        }
+        if (params->theta_wp < soil_moisture_floor) {
+            fprintf(stdout, "NOTE: calculated wilting point %.5f is below the soil moisture floor;\n"
+                            "      clamped to %.5f (%.2f theta_sat).\n",
+                    params->theta_wp, soil_moisture_floor, CH_SCALED_SOIL_MOISTURE_MIN);
+            params->theta_wp = soil_moisture_floor;
         }
     }
     return 0;
@@ -700,8 +727,7 @@ int main(int argc, char **argv)
     // Optional LUT
     SoilLookupTables lut = {0};
     if (opt.use_lut) {
-        if (soil_build_ch_lut(opt.lut_n, opt.lut_Theta_min,
-                              params.theta_r, params.theta_sat, params.b_exp,
+        if (soil_build_ch_lut(params.theta_r, params.theta_sat, params.b_exp,
                               params.phi_sat_cm, params.K_sat_cm_per_h, &lut) != 0)
         {
             die("Failed to build LUT");

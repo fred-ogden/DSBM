@@ -56,10 +56,6 @@
 #include "soil_helpers.h"
 #include "dsbm_census_hooks.h"   // DSBM_CENSUS() is empty except in the census build
 
-#ifndef THETA_MIN
-#define THETA_MIN 1.0e-03
-#endif
-
 // Helper functions below also declare all locals at the top and use no
 // ternary operators, for Tapenade reverse mode (see the kernel below).
 static inline double storage_sum_ndisc(const double *theta, const double *dz)
@@ -296,7 +292,16 @@ int soil_step_one_hour_stateless(
     rain_rate_m_per_h = forcing->rain_mm_per_h / 1000.0;
     pet_rate_m_per_h  = forcing->pet_mm_per_h  / 1000.0;
 
-    theta_floor = fmax(THETA_MIN, params->theta_r);
+    // Numerical floor on soil moisture: the one dry-end limit,
+    // CH_SCALED_SOIL_MOISTURE_MIN theta_sat (soil_config.h).  A retention
+    // relation with a residual soil moisture theta_r > 0 is not
+    // Clapp-Hornberger, and its floor is theta_r.  FLO 11/06/2026: was
+    // fmax(THETA_MIN, theta_r) with THETA_MIN = 1.0e-3 m3/m3.
+    if (params->theta_r > 0.0) {
+        theta_floor = params->theta_r;
+    } else {
+        theta_floor = CH_SCALED_SOIL_MOISTURE_MIN * params->theta_sat;
+    }
 
     // The lookup table is used only when requested.
     if (ctrl->use_ch_lookup_table) {
@@ -697,6 +702,15 @@ int soil_step_one_hour_stateless(
                 DSBM_CENSUS(CENSUS_SAFETY_CLAMP, i)
             }
         }
+#ifdef DSBM_CENSUS_BUILD
+        // census only: smallest scaled soil moisture, and theta at the floor
+        for (i = 0; i < ndisc; i++) {
+            DSBM_CENSUS_SCALED_SOIL_MOISTURE(i, theta[i] / params->theta_sat)
+            if (theta[i] <= theta_floor) {
+                DSBM_CENSUS(CENSUS_AT_DRY_LIMIT, i)
+            }
+        }
+#endif
     } // end substeps
 
     // finalize rates

@@ -40,15 +40,16 @@
 #include "soil_config.h"
 #include "dsbm_census_hooks.h"   // DSBM_CENSUS() is empty except in the census build
 
-#ifndef THETA_MIN
-#define THETA_MIN 1.0e-03   // m3/m3, fictitious minimum water content needed because CH assumes theta_r = 0
-#endif
 
-
-/************/ // Allocate and build a CH-style LUT over Theta = (theta-theta_r)/(theta_sat-theta_r)
+/************/ // Allocate and build the CH lookup table over Theta = (theta-theta_r)/(theta_sat-theta_r)
+//
+// FLO 11/06/2026: the Clapp-Hornberger relations are log-linear in Theta,
+//   ln(psi) = ln(phi_sat) - b ln(Theta),   ln(K) = ln(K_sat) + (2b+3) ln(Theta),
+// so 2 points represent them exactly (to roundoff).  The table always has
+// 2 points, from the one dry-end limit Theta = CH_SCALED_SOIL_MOISTURE_MIN
+// (soil_config.h) to Theta = 1.  The number of points and the minimum are
+// no longer arguments, so the table cannot carry a second dry-end limit.
 int soil_build_ch_lut(
-    int n_points,
-    double Theta_min_in,               // 0<Theta_min<=1; we clamp internally
     double theta_r,
     double theta_sat,
     double b_exp,
@@ -56,32 +57,40 @@ int soil_build_ch_lut(
     double K_sat_cm_per_h,
     SoilLookupTables *lut_out)
 {
+    const int n_points = 2;   // log-linear relations: 2 points are exact
+    double Theta_min;         // dry-end limit of the table (-)
+    double phi_sat_m;         // air-entry head (m)
+    double K_sat_m_per_h;     // saturated conductivity (m/h)
+    double lnTheta_min;       // ln(Theta_min)
+    double lnTheta_max;       // ln(1)
+    double dln;               // table spacing in ln(Theta)
+    double slope_lnpsi;       // d ln(psi) / d ln(Theta)
+    double slope_lnK;         // d ln(K) / d ln(Theta)
+    double *lnpsi;
+    double *lnK;
+    int i;
+
     if (!lut_out) return 1;
-    if (n_points < 2) n_points = 2;
 
-    double Theta_min = Theta_min_in;
-    if (Theta_min < 1.0e-6) Theta_min = 1.0e-6;
-    if (Theta_min > 1.0)    Theta_min = 1.0;
+    Theta_min     = CH_SCALED_SOIL_MOISTURE_MIN;
+    phi_sat_m     = phi_sat_cm / 100.0;
+    K_sat_m_per_h = K_sat_cm_per_h / 100.0;
 
-    double phi_sat_m     = phi_sat_cm / 100.0;
-    double K_sat_m_per_h = K_sat_cm_per_h / 100.0;
+    lnTheta_min = log(Theta_min);
+    lnTheta_max = 0.0;
+    dln = (lnTheta_max - lnTheta_min) / (double)(n_points - 1);
 
-    double lnTheta_min = log(Theta_min);
-    double lnTheta_max = 0.0; // ln(1)
-    double dln = (lnTheta_max - lnTheta_min) / (double)(n_points - 1);
-    if (dln <= 0.0) dln = 1.0; // safety
+    slope_lnpsi = -b_exp;            // ln(psi) = ln(phi_sat) + (-b)*ln(Theta)
+    slope_lnK   =  2.0*b_exp + 3.0;  // ln(K)   = ln(K_sat)   + (2b+3)*ln(Theta)
 
-    double slope_lnpsi = -b_exp;            // ln(psi) = ln(phi_sat) + (-b)*ln(Theta)
-    double slope_lnK   =  2.0*b_exp + 3.0;  // ln(K)   = ln(K_sat)   + (2b+3)*ln(Theta)
-
-    double *lnpsi = (double*)malloc((size_t)n_points * sizeof(double));
-    double *lnK   = (double*)malloc((size_t)n_points * sizeof(double));
+    lnpsi = (double*)malloc((size_t)n_points * sizeof(double));
+    lnK   = (double*)malloc((size_t)n_points * sizeof(double));
     if (!lnpsi || !lnK) {
         free(lnpsi); free(lnK);
         return 2;
     }
 
-    for (int i = 0; i < n_points; i++) {
+    for (i = 0; i < n_points; i++) {
         double lnT = lnTheta_min + i * dln;
         lnpsi[i] = log(phi_sat_m)     + slope_lnpsi * lnT;
         lnK[i]   = log(K_sat_m_per_h) + slope_lnK   * lnT;
@@ -114,18 +123,26 @@ void soil_free_ch_lut(SoilLookupTables *lut)
 // all locals (including loop indices) at the top of the function and use
 // no ternary (?:) operators or continue statements, as Tapenade reverse
 // mode (adjoint) requires.  The arithmetic is unchanged.
+//
+// FLO 11/06/2026: the dry-end clamps are now the single limit
+// theta >= CH_SCALED_SOIL_MOISTURE_MIN theta_sat (see soil_config.h),
+// replacing the absolute THETA_MIN = 1.0e-3 m3/m3.  The clamp is
+// non-decreasing in theta, so psi remains non-increasing and K
+// non-decreasing in theta through it.
 double psi_from_theta(double theta,
                       double theta_sat,
                       double phi_sat_cm,
                       double b_exp)
 {
+    double theta_min;  // dry-end limit, CH_SCALED_SOIL_MOISTURE_MIN theta_sat (-)
     double th;       // clamped soil moisture (-)
     double phi_m;    // air-entry head (m)
     double ratio;    // th / theta_sat (-)
     double psi_m;    // capillary head (m)
 
+    theta_min = CH_SCALED_SOIL_MOISTURE_MIN * theta_sat;
     th = theta;
-    if (th < THETA_MIN) th = THETA_MIN;
+    if (th < theta_min) th = theta_min;
     if (th > theta_sat) th = theta_sat;
 
     phi_m = phi_sat_cm / 100.0;
@@ -140,15 +157,17 @@ double theta_from_psi(double psi_m,
                       double phi_sat_cm,
                       double b_exp)
 {
+    double theta_min;  // dry-end limit, CH_SCALED_SOIL_MOISTURE_MIN theta_sat (-)
     double phi_m;    // air-entry head (m)
     double ratio;    // psi_m / phi_m (-)
     double th;       // soil moisture (-)
 
     if (psi_m <= 0.0) return theta_sat;
+    theta_min = CH_SCALED_SOIL_MOISTURE_MIN * theta_sat;
     phi_m = phi_sat_cm / 100.0;
     ratio = psi_m / phi_m;
     th = theta_sat * pow(ratio, -1.0 / b_exp);
-    if (th < 0.0) th = 0.0;
+    if (th < theta_min) th = theta_min;   // FLO 11/06/2026: was 0.0
     if (th > theta_sat) th = theta_sat;
     return th;
 }
@@ -159,15 +178,17 @@ double K_from_theta(double theta,
                     double K_sat_cm_per_h,
                     double b_exp)
 {
+    double theta_min;       // dry-end limit, CH_SCALED_SOIL_MOISTURE_MIN theta_sat (-)
     double K_sat_m_per_h;   // saturated conductivity (m/h)
     double th;              // clamped soil moisture (-)
     double ratio;           // th / theta_sat (-)
     double expo;            // 2 b + 3 (-)
     double K;               // conductivity (m/h)
 
+    theta_min = CH_SCALED_SOIL_MOISTURE_MIN * theta_sat;
     K_sat_m_per_h = K_sat_cm_per_h / 100.0;
     th = theta;
-    if (th < THETA_MIN) th = THETA_MIN;
+    if (th < theta_min) th = theta_min;
     if (th > theta_sat) th = theta_sat;
 
     ratio = th / theta_sat;
@@ -321,8 +342,10 @@ double limit_downward_transfer_to_equal_head(double transfer_requested_m,
     double log_head_difference;
     double log_head_difference_slope;
     double limited_transfer_m;
+    double theta_min;     // dry-end limit of psi_from_theta(), CH_SCALED_SOIL_MOISTURE_MIN theta_sat (-)
 
     distance_between_centers_m = 0.5 * (dz_upper_m + dz_lower_m);
+    theta_min = CH_SCALED_SOIL_MOISTURE_MIN * theta_sat;
     limited_transfer_m = transfer_requested_m;
 
     if (transfer_requested_m > 0.0) {
@@ -330,8 +353,9 @@ double limit_downward_transfer_to_equal_head(double transfer_requested_m,
         theta_lower_after = theta_lower + transfer_requested_m / dz_lower_m;
         // FLO 11/06/2026: Exact pre-screen, which avoids the two pow()
         // calls of the overshoot test on the common path.  psi decreases
-        // monotonically with theta (also through the THETA_MIN and
-        // theta_sat clamps of psi_from_theta()), so if the upper disc is
+        // monotonically with theta (also through the dry-end and
+        // theta_sat clamps of psi_from_theta(), which both discs share
+        // because they share theta_sat), so if the upper disc is
         // at least as wet as the lower disc after the requested transfer,
         // then psi_upper <= psi_lower < psi_lower + dz_int: the transfer
         // cannot overshoot equal head and is returned unchanged.  The
@@ -373,10 +397,10 @@ double limit_downward_transfer_to_equal_head(double transfer_requested_m,
                         }
 
                         log_head_difference_slope = 0.0;
-                        if (theta_upper_after > THETA_MIN && theta_upper_after < theta_sat) {
+                        if (theta_upper_after > theta_min && theta_upper_after < theta_sat) {
                             log_head_difference_slope += b_exp / (theta_upper_after * dz_upper_m);
                         }
-                        if (theta_lower_after > THETA_MIN && theta_lower_after < theta_sat) {
+                        if (theta_lower_after > theta_min && theta_lower_after < theta_sat) {
                             log_head_difference_slope += b_exp * psi_lower_m /
                                 (theta_lower_after * dz_lower_m * (psi_lower_m + distance_between_centers_m));
                         }

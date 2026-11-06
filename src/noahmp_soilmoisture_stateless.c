@@ -64,10 +64,6 @@
 
 #include "noahmp_soilmoisture_stateless.h"
 
-#ifndef THETA_MIN
-#define THETA_MIN 1.0e-03
-#endif
-
 static double storage_sum(const double theta[NDISC], const double dz[NDISC], int ndisc)
 {
     double storage_m = 0.0;
