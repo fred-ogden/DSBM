@@ -7,9 +7,25 @@
 # commit before the equal-head limit on downward transfers was added,
 # so the comparison shows the cost of the limiter and of anything since.
 #
+# Four DSBM configurations are timed, all over the full forcing record
+# with configs/soil_params.dat:
+#
+#   dsbm            run_dsbm.csh: lookup table, full output
+#   dsbm_analytic   run_dsbm_analytic.csh: analytic Clapp-Hornberger,
+#                   full output
+#   kernel_lut      lookup table, --verbosity 0 and only --write-volbal
+#   kernel_analytic analytic, --verbosity 0 and only --write-volbal
+#
+# The full-output runs format several CSV files and one screen line
+# per hour, which takes a large share of their time.  The kernel runs
+# write only the short volume-balance line per hour (--write-volbal is
+# kept because the summary file carrying the wall-clock time is written
+# only with it), so they measure mainly the DSBM kernel, the cost that
+# matters inside a calibration.
+#
 # Both commits are built in their own git worktrees under build/
 # (ignored by git), so output/ in this checkout is not touched.  Each
-# DSBM script is run n_repeats times per commit, alternating between
+# configuration is run n_repeats times per commit, alternating between
 # the commits so that machine load affects both alike.  The time
 # compared is the driver's "Simulation wall-clock time" from
 # volbal_summary.out (the time loop only, not program start-up).  The
@@ -43,7 +59,10 @@ set repo_root    = `pwd`
 set baseline_dir = $repo_root/build/timing_baseline
 set current_dir  = $repo_root/build/timing_current
 set results_dir  = $repo_root/output/run_times
-set runs         = "dsbm dsbm_analytic"
+set runs         = "dsbm dsbm_analytic kernel_lut kernel_analytic"
+# options shared by the kernel runs (paths relative to each worktree)
+set kernel_options = "--config configs/soil_params.dat --solver dsbm --forcing forcing/rain_pet_example.csv --verbosity 0 --write-volbal --timestamp datetime --dz 0.1,0.3,0.6,1.0 --zc 0.05,0.25,0.7,1.5"
+set lut_options    = "--use-lut --lut-n 400 --lut-Theta-min 1e-6"
 
 git rev-parse --verify --quiet "$baseline_commit^{commit}" >& /dev/null
 if ( $status != 0 ) then
@@ -79,22 +98,37 @@ foreach worktree_dir ( $baseline_dir $current_dir )
     endif
 end
 
-echo "==== 3. timing, $n_repeats repeats per script per commit"
+echo "==== 3. timing, $n_repeats repeats per configuration per commit"
 set report = $results_dir/run_times.txt
 echo "Run times (s), driver wall-clock of the time loop; baseline $baseline_commit, current HEAD" >! $report
 foreach run ( $runs )
+    echo "---- $run"
     set times_baseline = ( )
     set times_current = ( )
     set repeat = 0
     while ( $repeat < $n_repeats )
         @ repeat = $repeat + 1
         foreach worktree_dir ( $baseline_dir $current_dir )
-            ( cd $worktree_dir && ./run_$run.csh ) >& /dev/null
-            if ( $status != 0 ) then
-                echo "ERROR: run_$run.csh failed in $worktree_dir"
+            if ( "$run" == "kernel_lut" ) then
+                set outdir = output/timing_$run
+                mkdir -p $worktree_dir/$outdir
+                ( cd $worktree_dir && bin/soil_driver $kernel_options $lut_options --outdir $outdir ) >& /dev/null
+                set run_status = $status
+            else if ( "$run" == "kernel_analytic" ) then
+                set outdir = output/timing_$run
+                mkdir -p $worktree_dir/$outdir
+                ( cd $worktree_dir && bin/soil_driver $kernel_options --outdir $outdir ) >& /dev/null
+                set run_status = $status
+            else
+                set outdir = output/$run
+                ( cd $worktree_dir && ./run_$run.csh ) >& /dev/null
+                set run_status = $status
+            endif
+            if ( $run_status != 0 ) then
+                echo "ERROR: $run failed in $worktree_dir"
                 exit 1
             endif
-            set seconds = `grep "wall-clock" $worktree_dir/output/$run/volbal_summary.out | awk '{print $(NF-1)}'`
+            set seconds = `grep "wall-clock" $worktree_dir/$outdir/volbal_summary.out | awk '{print $(NF-1)}'`
             if ( "$worktree_dir" == "$baseline_dir" ) then
                 set times_baseline = ( $times_baseline $seconds )
             else
@@ -106,7 +140,7 @@ foreach run ( $runs )
     set min_current  = `echo $times_current  | awk '{m=$1; for(i=2;i<=NF;i++) if($i<m) m=$i; print m}'`
     set ratio = `echo $min_baseline $min_current | awk '{if ($1 > 0) printf "%.3f", $2/$1; else print "n/a"}'`
     echo "" >> $report
-    echo "run_$run.csh" >> $report
+    echo "$run" >> $report
     echo "   baseline : $times_baseline   minimum $min_baseline" >> $report
     echo "   current  : $times_current   minimum $min_current" >> $report
     echo "   current/baseline (minima) = $ratio" >> $report
