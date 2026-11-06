@@ -320,7 +320,7 @@ forward-Euler lateral sink, which is now Noah-MP fidelity 2 with
 |-- run_noahmp_fidelity1.csh             Noah-MP fidelity 1, Noah-MP as written
 |-- tools/
 |   |-- check_infiltration_regression.csh  rain input: FALSE bitwise against an earlier commit, TRUE totals
-|   |-- check_regression.csh             byte-for-byte check against an earlier commit (before the rain cascade)
+|   |-- check_regression.csh             byte-for-byte check of every run script against the baseline (3bcfc9f)
 |   |-- compare_run_times.csh            run times of HEAD against an earlier commit (full output and kernel-only)
 |   |-- run_branch_census.csh            branch-activity census
 |   |-- run_equal_head_census.csh        equal-head limit census over soil parameter sets
@@ -472,8 +472,13 @@ The Noah-MP theta, flux, and volume-balance time series should then
 match commit `1a8d1e2` byte for byte, with and without
 `--apply-fc-perc-threshold` (the equal-head limit is a DSBM change and
 does not affect Noah-MP); the summary file adds one line reporting the
-fidelity.  `tools/check_regression.csh` checks this against an earlier
-commit.
+fidelity and one reporting the infiltration flux upper boundary.
+
+`tools/check_regression.csh` runs every run script in HEAD and in the
+baseline commit (3bcfc9f, the rain cascade) and requires byte-for-byte
+agreement, apart from the wall-clock line of the summary.  Use it for
+changes that should not alter output; when a change meant to alter
+output is accepted, make its commit the new baseline in the script.
 
 Before the equal-head limit on downward transfers was added, the output
 then matched the code at commit `1a8d1e2` byte for byte (theta, flux,

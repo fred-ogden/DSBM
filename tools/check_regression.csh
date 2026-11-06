@@ -2,35 +2,30 @@
 #
 # check_regression.csh
 #
-# Byte-for-byte regression check of the current commit against an
-# earlier commit, for the changes in which output is expected NOT to
-# change (FLO 11/06/2026):
+# Byte-for-byte regression check of the current commit (HEAD) against the
+# last accepted baseline, for changes in which output is expected NOT to
+# change (renames, refactoring, performance work).  FLO 11/06/2026.
 #
-#   DSBM: run_dsbm.csh, run_dsbm_analytic.csh, run_dsbm_fc_limit.csh.
-#     Removing the unlimited downward-transfer option leaves the default
-#     (equal-head limit) unchanged.
+# Baseline: 3bcfc9f, infiltration as a flux upper boundary condition (rain
+# cascade, control_soil_infiltration_flux_upper_boundary_true_false).  When
+# a change that is meant to alter output is accepted, make its commit the
+# new baseline_commit below.
 #
-#   Noah-MP: the old run_noahmp.csh and run_noahmp_fc_limit.csh, which
-#     always applied the forward-Euler lateral sink, against the current
-#     driver at --noahmp-fidelity 2 --lateral-forward-euler (same
-#     options otherwise).
-#
+# Every run script is run in both commits, the same script on both sides:
+#   DSBM:    run_dsbm.csh, run_dsbm_analytic.csh, run_dsbm_fc_limit.csh,
+#            run_dsbm_infiltration_excess.csh,
+#            run_dsbm_analytic_infiltration_excess.csh
+#   Noah-MP: run_noahmp.csh, run_noahmp_fc_limit.csh, run_noahmp_fidelity1.csh
 # The theta, flux and volume-balance time series must match byte for
-# byte.  The summary files must match apart from the wall-clock time
-# line and the Noah-MP fidelity line (new).
+# byte; the summary files must match apart from the wall-clock time line.
 #
-# Both commits are built and run in their own git worktrees under
-# build/ (ignored by git), so output/ in this checkout is not touched.
-# Results and run logs go to output/regression_check/.
+# Both commits are built and run in their own git worktrees under build/
+# (ignored by git), so output/ in this checkout is not touched.  Results
+# and run logs go to output/regression_check/.
 #
 # Usage, from the repository root (or from tools/ as ./check_regression.csh):
-#     tools/check_regression.csh                (baseline commit da787c6)
-#     tools/check_regression.csh <commit>       (any earlier commit)
-#
-# FLO 11/06/2026: since the rain cascade (infiltration as a flux upper
-# boundary condition) the current run_dsbm*.csh output differs from any
-# earlier commit, so this check applies only to commits before it.  For
-# the cascade, use tools/check_infiltration_regression.csh.
+#     tools/check_regression.csh                (baseline commit 3bcfc9f)
+#     tools/check_regression.csh <commit>       (any other baseline that has all the run scripts)
 #
 # Exit status 0 only if every comparison passes.  ASCII only.
 
@@ -47,13 +42,13 @@ if ( ! -f Makefile || ! -d src || ! -d include ) then
 endif
 
 # ---- tunable parameters and directories ----
-set baseline_commit = da787c6
+set baseline_commit = 3bcfc9f
 if ( $#argv > 0 ) set baseline_commit = "$1"
 set repo_root    = `pwd`
 set baseline_dir = $repo_root/build/regression_baseline
 set current_dir  = $repo_root/build/regression_current
 set results_dir  = $repo_root/output/regression_check
-set dsbm_runs    = "dsbm dsbm_analytic dsbm_fc_limit"
+set runs         = "dsbm dsbm_analytic dsbm_fc_limit dsbm_infiltration_excess dsbm_analytic_infiltration_excess noahmp noahmp_fc_limit noahmp_fidelity1"
 set csv_files    = "theta_timeseries.csv fluxes_timeseries.csv volbal_timeseries.csv"
 
 git rev-parse --verify --quiet "$baseline_commit^{commit}" >& /dev/null
@@ -80,6 +75,16 @@ if ( $status != 0 ) then
     echo "ERROR: could not create current worktree; see $results_dir/worktree.log"
     exit 1
 endif
+foreach run ( $runs )
+    if ( ! -f $baseline_dir/run_$run.csh ) then
+        echo "ERROR: run_$run.csh not in baseline $baseline_commit (predates it?)"
+        exit 1
+    endif
+    if ( ! -f $current_dir/run_$run.csh ) then
+        echo "ERROR: run_$run.csh not in HEAD"
+        exit 1
+    endif
+end
 
 echo "==== 2. building both"
 foreach worktree_dir ( $baseline_dir $current_dir )
@@ -90,39 +95,25 @@ foreach worktree_dir ( $baseline_dir $current_dir )
     endif
 end
 
-echo "==== 3. running the baseline scripts"
-foreach run ( $dsbm_runs noahmp noahmp_fc_limit )
-    ( cd $baseline_dir && ./run_$run.csh ) >& $results_dir/baseline_$run.log
-    if ( $status != 0 ) then
-        echo "ERROR: baseline run_$run.csh failed; see $results_dir/baseline_$run.log"
-        exit 1
-    endif
+echo "==== 3. running every script in both"
+foreach run ( $runs )
+    foreach side ( baseline current )
+        if ( "$side" == "baseline" ) then
+            set worktree_dir = $baseline_dir
+        else
+            set worktree_dir = $current_dir
+        endif
+        ( cd $worktree_dir && ./run_$run.csh ) >& $results_dir/${side}_$run.log
+        if ( $status != 0 ) then
+            echo "ERROR: $side run_$run.csh failed; see $results_dir/${side}_$run.log"
+            exit 1
+        endif
+    end
 end
 
-echo "==== 4. running the current DSBM scripts and Noah-MP fidelity 2 forward Euler"
-foreach run ( $dsbm_runs )
-    ( cd $current_dir && ./run_$run.csh ) >& $results_dir/current_$run.log
-    if ( $status != 0 ) then
-        echo "ERROR: current run_$run.csh failed; see $results_dir/current_$run.log"
-        exit 1
-    endif
-end
-# Same options as the old run_noahmp.csh and run_noahmp_fc_limit.csh,
-# plus --noahmp-fidelity 2 --lateral-forward-euler.
-foreach run ( noahmp noahmp_fc_limit )
-    set fc_option = ""
-    if ( "$run" == "noahmp_fc_limit" ) set fc_option = "--apply-fc-perc-threshold"
-    mkdir -p $current_dir/output/$run
-    ( cd $current_dir && bin/soil_driver --config configs/soil_params.dat --solver noahmp --noahmp-fidelity 2 --lateral-forward-euler $fc_option --forcing forcing/rain_pet_example.csv --outdir output/$run --verbosity 1 --write-theta --write-fluxes --write-volbal --timestamp datetime --dz 0.1,0.3,0.6,1.0 --zc 0.05,0.25,0.7,1.5 ) >& $results_dir/current_$run.log
-    if ( $status != 0 ) then
-        echo "ERROR: current Noah-MP $run run failed; see $results_dir/current_$run.log"
-        exit 1
-    endif
-end
-
-echo "==== 5. comparing"
+echo "==== 4. comparing"
 set n_fail = 0
-foreach run ( $dsbm_runs noahmp noahmp_fc_limit )
+foreach run ( $runs )
     foreach csv_file ( $csv_files )
         cmp -s $baseline_dir/output/$run/$csv_file $current_dir/output/$run/$csv_file
         if ( $status == 0 ) then
@@ -132,13 +123,13 @@ foreach run ( $dsbm_runs noahmp noahmp_fc_limit )
             @ n_fail = $n_fail + 1
         endif
     end
-    grep -v -e "wall-clock" -e "Noah-MP fidelity" $baseline_dir/output/$run/volbal_summary.out >! $results_dir/baseline_${run}_summary.txt
-    grep -v -e "wall-clock" -e "Noah-MP fidelity" $current_dir/output/$run/volbal_summary.out >! $results_dir/current_${run}_summary.txt
+    grep -v wall-clock $baseline_dir/output/$run/volbal_summary.out >! $results_dir/baseline_${run}_summary.txt
+    grep -v wall-clock $current_dir/output/$run/volbal_summary.out >! $results_dir/current_${run}_summary.txt
     cmp -s $results_dir/baseline_${run}_summary.txt $results_dir/current_${run}_summary.txt
     if ( $status == 0 ) then
-        echo "PASS  $run/volbal_summary.out (wall-clock and fidelity lines excluded)"
+        echo "PASS  $run/volbal_summary.out (wall-clock line excluded)"
     else
-        echo "FAIL  $run/volbal_summary.out (wall-clock and fidelity lines excluded)"
+        echo "FAIL  $run/volbal_summary.out (wall-clock line excluded)"
         @ n_fail = $n_fail + 1
     endif
 end
